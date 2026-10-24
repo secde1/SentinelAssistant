@@ -1,0 +1,12 @@
+.env
+maxfiy/
+zaxira/
+jurnal/
+ish/
+__pycache__/
+*.pyc
+venv/
+.venv/
+/tools/
+modellar/
+.pytest_cache/
