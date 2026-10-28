@@ -18,6 +18,7 @@ class Pending:
     task_id: str
     future: asyncio.Future
     message_id: int | None = None
+    text: str = ""  # so'rov matni (ustki panelda ko'rsatish uchun)
     created: float = field(default_factory=time.monotonic)
 
 

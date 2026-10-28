@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 def build_core(cfg: Config, paths: Paths) -> tuple[Redactor, Inventory, Journal, AgentRunner]:
     inventory = Inventory(paths.inventory_json)
     redactor = Redactor(inventory.secret_values)
-    redactor.add(cfg.telegram_token, cfg.claude_oauth_token)
+    redactor.add(cfg.telegram_token, cfg.claude_oauth_token, cfg.control_token)
     journal = Journal(paths.jurnal, redactor)
     runner = AgentRunner(cfg, paths, ToolExecutor(), inventory, redactor, journal)
     return redactor, inventory, journal, runner
@@ -58,11 +58,24 @@ async def run_service(cfg: Config, paths: Paths, redactor: Redactor, inventory: 
         auth_line = f" Claude: {auth.label}." if auth.ok else ""
         await bot.send_text(f"✅ IT-agent ishga tushdi. Model: {cfg.model}.{auth_line} /help — buyruqlar.")
     background = proactive.start(cfg, paths, inventory, journal, redactor, bot.tasks, bot.send_text)
+    control = None
+    if cfg.control_enabled and cfg.control_port > 0:
+        from .control import ControlServer
+        control = ControlServer(cfg, paths, journal, redactor, bot.tasks, pending, runner)
+        try:
+            await control.start()
+            journal.event("control", f"Ustki panel serveri: 127.0.0.1:{cfg.control_port}", port=cfg.control_port)
+            log.info("Ustki panel serveri: 127.0.0.1:%s (oynacha.cmd bilan oching)", cfg.control_port)
+        except OSError as exc:
+            log.warning("Ustki panel serveri ishga tushmadi (%s) — port band bo'lishi mumkin", exc)
+            control = None
     try:
         await bot.run()
     finally:
         for t in background:
             t.cancel()
+        if control:
+            await control.stop()
         await api.aclose()
 
 
@@ -142,6 +155,10 @@ async def _check_proactive(cfg: Config, paths: Paths, line) -> None:
     hm = daily_time(cfg.daily_check_at)
     print(f"  i Kunlik tekshiruv: {cfg.daily_check_at} (ro'yxat: xotira/kunlik_tekshiruv.md)" if hm
           else "  i Kunlik tekshiruv: o'chiq (DAILY_CHECK_AT bo'sh)")
+    if cfg.control_enabled and cfg.control_port > 0:
+        print(f"  i Ustki panel (oynacha): 127.0.0.1:{cfg.control_port} — agent ishlaganda oynacha.cmd bilan oching")
+    else:
+        print("  i Ustki panel (oynacha): o'chiq (CONTROL_ENABLED=0)")
     servers, read_only = load_external_mcp(paths.mcp_json)
     print(f"  i Tashqi MCP: {', '.join(sorted(servers))} ({len(read_only)} ta tool tasdiqsiz)" if servers
           else "  i Tashqi MCP: yo'q (maxfiy/mcp.json)")

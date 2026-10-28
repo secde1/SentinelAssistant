@@ -65,6 +65,9 @@ class Config:
     zabbix_min_severity: int = 3
     alert_tasks_per_hour: int = 3
     daily_check_at: str = ""
+    control_enabled: bool = True
+    control_port: int = 8787
+    control_token: str = ""
 
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> "Config":
@@ -106,6 +109,9 @@ class Config:
             zabbix_min_severity=_int(e("ZABBIX_MIN_SEVERITY"), 3),
             alert_tasks_per_hour=_int(e("ALERT_TASKS_PER_HOUR"), 3),
             daily_check_at=(e("DAILY_CHECK_AT") or "").strip(),
+            control_enabled=_bool(e("CONTROL_ENABLED"), True),
+            control_port=_int(e("CONTROL_PORT"), 8787),
+            control_token=(e("CONTROL_TOKEN") or "").strip(),
         )
 
     def problems(self, need_telegram: bool = True) -> list[str]:

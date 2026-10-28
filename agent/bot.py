@@ -115,6 +115,7 @@ class TelegramBot:
     # ------------------------------------------------------------ kutilayotgan javoblar
     async def request_approval(self, task_id: str, text: str) -> bool:
         p = self.pending.create("approval", task_id)
+        p.text = text
         markup = {"inline_keyboard": [[{"text": "✅ Ha", "callback_data": f"ap:{p.id}:y"},
                                        {"text": "❌ Yo'q", "callback_data": f"ap:{p.id}:n"}]]}
         msg = await self.send_text(text, reply_markup=markup)
@@ -132,6 +133,7 @@ class TelegramBot:
 
     async def ask(self, task_id: str, question: str) -> str | None:
         p = self.pending.create("question", task_id)
+        p.text = question
         msg = await self.send_text(f"❓ {question}\n(Javobni shu xabarga reply qilib yozing.)")
         if not msg:
             self.pending.discard(p.id)
@@ -141,6 +143,7 @@ class TelegramBot:
 
     async def request_secret(self, task_id: str, prompt: str) -> str | None:
         p = self.pending.create("credential", task_id)
+        p.text = prompt
         msg = await self.send_text(prompt)
         if not msg:
             self.pending.discard(p.id)
