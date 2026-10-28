@@ -104,7 +104,8 @@ class AgentPanel:
         self.root.configure(bg=BG)
         self.width = 760
         self.x = (self.root.winfo_screenwidth() - self.width) // 2
-        self.root.geometry(f"{self.width}x58+{self.x}+8")
+        self.top_y = 8
+        self.root.geometry(f"{self.width}x58+{self.x}+{self.top_y}")
 
         # yuqori qator (doimiy)
         bar = tk.Frame(self.root, bg=BG)
@@ -143,6 +144,17 @@ class AgentPanel:
         # pastki karta (tasdiq / tafsilot) — kerak bo'lganda
         self.card = tk.Frame(self.root, bg=BG)
         self.card.pack(fill="x", padx=10, pady=(0, 8))
+
+        self._pin()  # doimiy ekran tepasida qolish
+
+    def _pin(self):
+        """Har 3 soniyada topmost'ni qayta tiklaydi — boshqa dastur ustidan bosib ketsa ham tepaga qaytadi."""
+        try:
+            self.root.attributes("-topmost", False)
+            self.root.attributes("-topmost", True)
+        except tk.TclError:
+            pass
+        self.root.after(3000, self._pin)
 
     def _btn(self, parent, text, cmd, color, tip=""):
         b = tk.Button(parent, text=text, command=cmd, bg=CARD, fg=color, relief="flat",
