@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import logging
 from datetime import datetime
 
@@ -27,7 +28,7 @@ log = logging.getLogger(__name__)
 def build_core(cfg: Config, paths: Paths) -> tuple[Redactor, Inventory, Journal, AgentRunner]:
     inventory = Inventory(paths.inventory_json)
     redactor = Redactor(inventory.secret_values)
-    redactor.add(cfg.telegram_token, cfg.claude_oauth_token, cfg.control_token)
+    redactor.add(cfg.telegram_token, cfg.claude_oauth_token, cfg.control_token, cfg.azure_speech_key)
     journal = Journal(paths.jurnal, redactor)
     runner = AgentRunner(cfg, paths, ToolExecutor(), inventory, redactor, journal)
     return redactor, inventory, journal, runner
@@ -45,6 +46,9 @@ async def run_service(cfg: Config, paths: Paths, redactor: Redactor, inventory: 
     if cfg.stt_enabled:
         from .stt import Transcriber  # faster-whisper faqat shu yerda import qilinadi
         bot.stt = Transcriber(cfg.stt_model, cfg.stt_language, paths.models)
+    if cfg.reels_enabled:
+        from .studio.store import StudioStore
+        bot.studio = StudioStore(paths.studio)
     me = await api.get_me()
     journal.event("start", f"Agent ishga tushdi (@{me.get('username')}, model {cfg.model})", bot=me.get("username"))
     log.info("Agent ishga tushdi: @%s, model %s, AGENT_HOME %s", me.get("username"), cfg.model, paths.home)
@@ -164,15 +168,35 @@ async def _check_proactive(cfg: Config, paths: Paths, line) -> None:
           else "  i Tashqi MCP: yo'q (maxfiy/mcp.json)")
     if not cfg.stt_enabled:
         print("  i Ovozli xabar (nutq->matn): o'chiq (STT_ENABLED=0)")
+    elif importlib.util.find_spec("faster_whisper") is None:
+        line(False, "faster-whisper o'rnatilmagan — pip install -r requirements.txt (yoki STT_ENABLED=0)")
     else:
-        try:
-            import faster_whisper  # noqa: F401
-            cached = (paths.models / f"models--Systran--faster-whisper-{cfg.stt_model}").is_dir()
-            line(True, f"Ovozli xabar (nutq->matn): faster-whisper '{cfg.stt_model}'"
-                       f"{' (yuklangan)' if cached else ' (birinchi ovozli xabarda yuklanadi)'}, "
-                       f"til: {cfg.stt_language or 'avtomatik'}")
-        except ImportError:
-            line(False, "faster-whisper o'rnatilmagan — pip install -r requirements.txt (yoki STT_ENABLED=0)")
+        model_dir = paths.models / cfg.stt_model
+        line(model_dir.is_dir(), f"Ovozli xabar (nutq->matn): model '{cfg.stt_model}', til: {cfg.stt_language or 'uz'}"
+                                 + ("" if model_dir.is_dir() else f" — papka TOPILMADI: {model_dir}"))
+    _check_reels(cfg, line)
+
+
+def _check_reels(cfg: Config, line) -> None:
+    if not cfg.reels_enabled:
+        print("  i Instagram Reels studiyasi: o'chiq (REELS_ENABLED=0)")
+        return
+    from .studio import render, tts
+
+    try:
+        import imageio_ffmpeg
+        font = render.find_font(cfg.reels_font)
+        line(True, f"Reels studiyasi: ffmpeg {imageio_ffmpeg.get_ffmpeg_version()}, shrift {font.name}")
+    except Exception as exc:  # noqa: BLE001
+        line(False, f"Reels studiyasi: {type(exc).__name__}: {exc}")
+    engine = tts.pick_engine(cfg.reels_tts, cfg.azure_speech_key)
+    if engine == "azure":
+        print(f"  i Reels ovozi: Azure Speech ({cfg.azure_speech_region}), {cfg.reels_voice}")
+    else:
+        print(f"  i Reels ovozi: edge-tts (sinov), {cfg.reels_voice} — ochiq e'lon uchun Azure kaliti tavsiya etiladi")
+    print(f"  i Kunlik Reels: {cfg.reels_per_day} ta, {cfg.reels_prepare_at}" if daily_time(cfg.reels_prepare_at)
+          else "  i Kunlik Reels: avtomatik emas (REELS_PREPARE_AT bo'sh) — /reels_tayyorla bilan qo'lda")
+    print("  i Instagram joylash: hali ulanmagan (2-bosqich: professional akkaunt + Meta API kerak)")
 
 
 def run_forever(cfg: Config, paths: Paths, redactor: Redactor, inventory: Inventory, journal: Journal,

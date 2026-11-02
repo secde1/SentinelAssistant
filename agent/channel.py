@@ -10,6 +10,10 @@ class OwnerChannel(Protocol):
 
     async def send_file(self, path: Path, caption: str = "") -> None: ...
 
+    async def send_video(self, path: Path, caption: str = "", buttons: dict | None = None) -> None:
+        """Video (masalan Reels ko'rib chiqish uchun) — ixtiyoriy tugmalar bilan."""
+        ...
+
     async def request_approval(self, text: str) -> bool:
         """True faqat aniq "ha" kelganda. Yo'q / noaniq / timeout -> False."""
         ...

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from pathlib import Path
 from typing import Any
@@ -102,6 +103,28 @@ class TelegramAPI:
                                    files={"voice": (path.name, content)}, timeout=120)
         return await self.call("sendDocument", {"chat_id": str(chat_id), "caption": caption[:1000]},
                                files={"document": (path.name, content)}, timeout=120)
+
+    async def send_video(self, chat_id: int, path: Path, caption: str = "", reply_markup: dict | None = None,
+                         width: int = 1080, height: int = 1920, duration: int = 0) -> dict:
+        with open(path, "rb") as fh:
+            content = fh.read()
+        payload = {"chat_id": str(chat_id), "caption": caption[:1000], "supports_streaming": "true",
+                   "width": str(width), "height": str(height)}
+        if duration:
+            payload["duration"] = str(duration)
+        if reply_markup:
+            payload["reply_markup"] = json.dumps(reply_markup)
+        return await self.call("sendVideo", payload, files={"video": (path.name, content, "video/mp4")}, timeout=300)
+
+    async def edit_reply_markup(self, chat_id: int, message_id: int, reply_markup: dict | None = None) -> None:
+        payload: dict = {"chat_id": chat_id, "message_id": message_id}
+        if reply_markup:
+            payload["reply_markup"] = reply_markup
+        try:
+            await self.call("editMessageReplyMarkup", payload)
+        except TelegramError as exc:
+            if "not modified" not in str(exc):
+                log.warning("editMessageReplyMarkup: %s", exc)
 
     async def send_chat_action(self, chat_id: int, action: str = "typing") -> None:
         try:

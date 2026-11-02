@@ -31,7 +31,7 @@ from claude_agent_sdk import (AssistantMessage, ClaudeAgentOptions, ClaudeSDKCli
                               CLINotFoundError, HookMatcher, RateLimitEvent, ResultMessage, SystemMessage, TextBlock,
                               create_sdk_mcp_server, tool)
 
-from . import claude_cli
+from . import claude_cli, personality, verification
 from .channel import OwnerChannel
 from .claude_cli import SubscriptionStop
 from .config import PROJECT_ROOT, Config
@@ -183,9 +183,17 @@ class AgentRunner:
         self.last_limits = ""  # oxirgi rate_limit_event bo'yicha: "5 soatlik 37%, haftalik 22%"
 
     def _static_system(self) -> str:
-        base = (PROJECT_ROOT / "SYSTEM_PROMPT.md").read_text(encoding="utf-8")
+        """Ish qoidalari (SYSTEM_PROMPT.md) -> shaxsiyat (SHAXSIYAT.md + shaxsiyat.json) -> Reels studiyasi
+        (STUDIYA.md, REELS_ENABLED=1 bo'lsa) -> texnik qo'shimcha."""
+        rules = (PROJECT_ROOT / "SYSTEM_PROMPT.md").read_text(encoding="utf-8")
+        persona_file = PROJECT_ROOT / "SHAXSIYAT.md"
+        persona = persona_file.read_text(encoding="utf-8") if persona_file.exists() else ""
+        levels = personality.render(PROJECT_ROOT / "shaxsiyat.json")
+        studio_file = PROJECT_ROOT / "STUDIYA.md"
+        studio = studio_file.read_text(encoding="utf-8") if self.cfg.reels_enabled and studio_file.exists() else ""
         tex = (Path(__file__).parent / "prompt_texnik.md").read_text(encoding="utf-8")
-        return base.strip() + "\n\n" + tex.format(home=self.paths.home, python=sys.executable).strip()
+        parts = (rules, persona, levels, studio, tex.format(home=self.paths.home, python=sys.executable))
+        return "\n\n".join(p.strip() for p in parts if p.strip())
 
     def unavailable_reason(self) -> str | None:
         """Yangi topshiriq qabul qilinmasa — sababi (obuna limiti tugagan)."""
@@ -220,18 +228,16 @@ class AgentRunner:
             return None
         listed = "; ".join(f"{i + 1}) {x}" for i, x in enumerate(items))
         return (f"[TIZIM — agent kodi, Jamshid emas] Yakunlashdan oldin: {listed}. "
-                "So'ng yakuniy javobni TO'LIQ qayta yoz (IT ishida — 5 qator: Muammo/Sabab/Qildim/Hozir/Taklif).")
+                "So'ng yakuniy javobni TO'LIQ qayta yoz: birinchi qator 'Holat: ...', IT ishida keyin 5 qator "
+                "(Muammo/Sabab/Qildim/Hozir/Taklif).")
 
     def _finalize(self, req: TaskRequest, ctx: ToolContext, status: TaskStatus, text: str, code: str) -> TaskOutcome:
-        text = self.redactor.redact(text or "").strip()
-        prefix = ""
         verified: bool | None = None
         if ctx.mutations:
             verified = ctx.verified_after_mutation and bool(ctx.last_verify_ok)
-            if not verified:
-                prefix = ("❌ OXIRGI TEKSHIRUV O'TMADI — natija tasdiqlanmagan.\n" if ctx.last_verify_ok is False
-                          else "⚠️ TEKSHIRILMAGAN: o'zgarishdan keyin qayta o'lchanmadi.\n")
-                text = re.sub(r"(?i)\btasdiqlandi\b", "tasdiqlanmagan (verify yo'q)", text)
+        facts = verification.Facts(mutated=bool(ctx.mutations), verified=bool(verified),
+                                   verify_failed=ctx.last_verify_ok is False, run_code=code)
+        text, final_status = verification.apply(self.redactor.redact(text or ""), facts)
         file = None
         lines = [ln for ln in text.splitlines() if ln.strip()]
         # IT hisobotini model o'zi 5 qatorda yozadi; bu chegara shaxsiy javob (xat, xulosa) chatga sig'ishi uchun.
@@ -242,7 +248,7 @@ class AgentRunner:
         mark = "" if not ctx.mutations else (" · ✅ tekshirilgan" if verified else " · ⚠️ tekshirilmagan")
         plan = self.plan + (f" ({status.plan_note})" if status.plan_note else "")
         footer = f"\n— {req.id} · {status.steps} amal · {_elapsed(time.monotonic() - status.started)}{mark} · {plan}"
-        final = prefix + text + footer
+        final = text + footer
         try:
             with self.paths.chat_history.open("a", encoding="utf-8") as f:
                 f.write(json.dumps({"ts": datetime.now().isoformat(timespec="seconds"), "task": req.id,
@@ -252,7 +258,7 @@ class AgentRunner:
             log.exception("suhbat tarixini yozib bo'lmadi")
         self.journal.event(
             "task", f"Topshiriq {req.id} tugadi: {code}, {status.steps} amal",
-            task=req.id, status=code, iterations=status.iterations, steps=status.steps,
+            task=req.id, status=code, holat=final_status, iterations=status.iterations, steps=status.steps,
             input_tokens=status.input_tokens, output_tokens=status.output_tokens,
             cache_read_tokens=status.cache_read_tokens, mutated=bool(ctx.mutations), verified=verified,
             approvals=ctx.approvals, history=ctx.history_logged, skill=ctx.skill_written,

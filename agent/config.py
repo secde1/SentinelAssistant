@@ -11,10 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ENV_FILE = PROJECT_ROOT / ".env"
 
 VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-
-
-class ConfigError(Exception):
-    pass
+DEFAULT_STT_MODEL = "univoice-stt-uz-ct2"  # AGENT_HOME/modellar ichidagi CTranslate2 o'zbekcha whisper papkasi
 
 
 def _bool(value: str | None, default: bool) -> bool:
@@ -58,7 +55,7 @@ class Config:
     pwsh_path: str = ""
     notify_on_start: bool = True
     stt_enabled: bool = True
-    stt_model: str = "small"
+    stt_model: str = DEFAULT_STT_MODEL
     stt_language: str = ""
     zabbix_entry: str = "zabbix"
     zabbix_poll_sec: int = 120
@@ -68,6 +65,16 @@ class Config:
     control_enabled: bool = True
     control_port: int = 8787
     control_token: str = ""
+    reels_enabled: bool = False
+    reels_per_day: int = 2
+    reels_prepare_at: str = ""
+    reels_tts: str = "auto"
+    reels_voice: str = "uz-UZ-MadinaNeural"
+    reels_rate: str = "+0%"
+    reels_font: str = ""
+    reels_brand: str = ""
+    azure_speech_key: str = ""
+    azure_speech_region: str = ""
 
     @classmethod
     def from_env(cls, env_file: Path | None = None) -> "Config":
@@ -102,7 +109,7 @@ class Config:
             pwsh_path=(e("PWSH_PATH") or "").strip(),
             notify_on_start=_bool(e("NOTIFY_ON_START"), True),
             stt_enabled=_bool(e("STT_ENABLED"), True),
-            stt_model=(e("STT_MODEL") or "small").strip(),
+            stt_model=(e("STT_MODEL") or DEFAULT_STT_MODEL).strip(),
             stt_language=(e("STT_LANGUAGE") or "").strip().lower(),
             zabbix_entry=(e("ZABBIX_ENTRY") or "zabbix").strip(),
             zabbix_poll_sec=_int(e("ZABBIX_POLL_SEC"), 120),
@@ -112,6 +119,16 @@ class Config:
             control_enabled=_bool(e("CONTROL_ENABLED"), True),
             control_port=_int(e("CONTROL_PORT"), 8787),
             control_token=(e("CONTROL_TOKEN") or "").strip(),
+            reels_enabled=_bool(e("REELS_ENABLED"), False),
+            reels_per_day=_int(e("REELS_PER_DAY"), 2),
+            reels_prepare_at=(e("REELS_PREPARE_AT") or "").strip(),
+            reels_tts=(e("REELS_TTS") or "auto").strip().lower(),
+            reels_voice=(e("REELS_VOICE") or "uz-UZ-MadinaNeural").strip(),
+            reels_rate=(e("REELS_RATE") or "+0%").strip(),
+            reels_font=(e("REELS_FONT") or "").strip(),
+            reels_brand=(e("REELS_BRAND") or "").strip(),
+            azure_speech_key=(e("AZURE_SPEECH_KEY") or "").strip(),
+            azure_speech_region=(e("AZURE_SPEECH_REGION") or "").strip(),
         )
 
     def problems(self, need_telegram: bool = True) -> list[str]:
@@ -129,6 +146,14 @@ class Config:
             out.append(f"DAILY_CHECK_AT={self.daily_check_at} noto'g'ri. Format: HH:MM (masalan 09:00) yoki bo'sh.")
         if not 0 <= self.zabbix_min_severity <= 5:
             out.append(f"ZABBIX_MIN_SEVERITY={self.zabbix_min_severity} noto'g'ri. Ruxsat: 0..5 (3 = Average).")
+        if self.reels_prepare_at and daily_time(self.reels_prepare_at) is None:
+            out.append(f"REELS_PREPARE_AT={self.reels_prepare_at} noto'g'ri. Format: HH:MM yoki bo'sh.")
+        if self.reels_tts not in {"auto", "azure", "edge"}:
+            out.append(f"REELS_TTS={self.reels_tts} noto'g'ri. Ruxsat: auto, azure, edge.")
+        if self.reels_tts == "azure" and not (self.azure_speech_key and self.azure_speech_region):
+            out.append("REELS_TTS=azure, lekin AZURE_SPEECH_KEY / AZURE_SPEECH_REGION bo'sh.")
+        if not 1 <= self.reels_per_day <= 10:
+            out.append(f"REELS_PER_DAY={self.reels_per_day} noto'g'ri. Ruxsat: 1..10.")
         return out
 
 

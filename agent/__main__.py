@@ -1,5 +1,5 @@
 """Ishga tushirish:
-    python -m agent            — xizmat rejimi (Telegram bot, NSSM shuni ishga tushiradi)
+    python -m agent            — doimiy rejim: Telegram bot (AgentRestart vazifasi yoki NSSM xizmati ishga tushiradi)
     python -m agent --check    — konfiguratsiya, PowerShell, Telegram va Claude ulanishini tekshirish
     python -m agent --once "…" — bitta topshiriqni konsolda bajarish (Telegramsiz sinov)
     python -m agent --init     — faqat AGENT_HOME papkalarini yaratish

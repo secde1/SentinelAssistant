@@ -17,7 +17,7 @@
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File .\install.ps1
 .EXAMPLE
-  powershell -ExecutionPolicy Bypass -File .\install.ps1 -AgentHome D:\agent -WeeklyDay Friday -WeeklyTime 17:00
+  powershell -ExecutionPolicy Bypass -File .\install.ps1 -AgentHome D:\it-agent\data -WeeklyDay Friday -WeeklyTime 17:00
 #>
 [CmdletBinding()]
 param(

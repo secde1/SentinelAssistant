@@ -105,10 +105,6 @@ class ToolContext:
         return (f"{head}\n\n[... {len(text) - len(head) - len(tail)} belgi qisqartirildi ...]\n\n{tail}\n\n"
                 f"[To'liq natija ({len(text)} belgi): {path} — kerak bo'lsa read_file bilan qismlab o'qing]")
 
-    def new_file(self, name: str) -> Path:
-        self._out_counter += 1
-        return self.work_dir / f"{self._out_counter:03d}-{name}"
-
 
 Handler = Callable[[ToolContext, dict], Awaitable[ToolResult]]
 Classifier = Callable[[ToolContext, dict], Decision]

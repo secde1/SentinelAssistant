@@ -18,6 +18,9 @@ class ConsoleChannel:
     async def send_file(self, path: Path, caption: str = "") -> None:
         print(f"\n[agent fayl] {path} — {self.redactor.redact(caption)}\n", flush=True)
 
+    async def send_video(self, path: Path, caption: str = "", buttons: dict | None = None) -> None:
+        print(f"\n[agent video] {path}\n{self.redactor.redact(caption)}\n(tasdiq tugmalari faqat Telegram'da)\n", flush=True)
+
     async def request_approval(self, text: str) -> bool:
         print("\n" + self.redactor.redact(text), flush=True)
         answer = await asyncio.to_thread(input, "Tasdiqlaysizmi? (ha/yo'q): ")

@@ -106,6 +106,11 @@ class Paths:
         """STT modellari (GitHubga tushmaydi — skill/xotira/skript emas)."""
         return self.home / "modellar"
 
+    @property
+    def studio(self) -> Path:
+        """Reels studiyasi: holatlar bazasi va videolar (ish/ ichida — GitHubga tushmaydi)."""
+        return self.ish / "reels"
+
 
 def ensure_workspace(home: Path) -> Paths:
     paths = Paths(Path(home))

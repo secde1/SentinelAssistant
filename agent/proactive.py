@@ -1,6 +1,6 @@
-"""Proaktiv ishlar (xizmat ichida, fon vazifalar): Zabbix alertlarini kuzatish va kunlik tekshiruv.
+"""Proaktiv ishlar (xizmat ichida, fon vazifalar): Zabbix alertlari, kunlik tekshiruv va kunlik Reels tayyorlash.
 
-Ikkalasida ham topshiriqni Jamshid emas, KOD boshlaydi — shuning uchun TaskRequest.auto=True: bunday topshiriqda har
+Ularda topshiriqni Jamshid emas, KOD boshlaydi — shuning uchun TaskRequest.auto=True: bunday topshiriqda har
 qanday o'zgartirish faqat Jamshid tasdig'i bilan (ToolExecutor), alert matni esa — MA'LUMOT, buyruq emas.
 Zabbix'ni so'rash modelsiz (obuna limiti sarflanmaydi); model faqat YANGI muammo chiqqanda, soatlik limit bilan ishlaydi.
 """
@@ -29,6 +29,8 @@ ZABBIX_NOTE = ("[AVTOMATIK TOPSHIRIQ — Zabbix alerti asosida KOD yaratdi, Jams
                "Jamshid tasdig'i bilan.]")
 DAILY_NOTE = ("[AVTOMATIK TOPSHIRIQ — kunlik jadval (DAILY_CHECK_AT), ro'yxat xotira/kunlik_tekshiruv.md dan. Faqat "
               "o'qish/diagnostika; o'zgartirish faqat Jamshid tasdig'i bilan.]")
+REELS_NOTE = ("[AVTOMATIK TOPSHIRIQ — kunlik Reels jadvali (REELS_PREPARE_AT). Hech narsa joylanmaydi: har video "
+              "egasining tasdig'iga yuboriladi.]")
 
 Submit = Callable[[TaskRequest], Awaitable[str | None]]
 Notify = Callable[[str], Awaitable]
@@ -262,18 +264,53 @@ class DailyCheck:
         return tid
 
     async def run(self) -> None:
-        hm = daily_time(self.cfg.daily_check_at)
-        if hm is None:
-            return
-        target = self.next_run(datetime.now(), hm)
-        while True:
-            if datetime.now() >= target:
-                try:
-                    await self.fire()
-                except Exception:  # noqa: BLE001
-                    log.exception("Kunlik tekshiruv boshlanmadi")
-                target = self.next_run(datetime.now(), hm)
-            await asyncio.sleep(min(60.0, max(1.0, (target - datetime.now()).total_seconds())))
+        await run_daily(self.cfg.daily_check_at, self.fire, "Kunlik tekshiruv")
+
+
+async def run_daily(at: str, fire: Callable[[], Awaitable], name: str) -> None:
+    """Har kuni HH:MM da fire() — soat har daqiqada tekshiriladi (noutbuk uyqudan uyg'onganda o'tib ketgani bir marta
+    bajariladi). at bo'sh yoki noto'g'ri bo'lsa — hech narsa qilmaydi."""
+    hm = daily_time(at)
+    if hm is None:
+        return
+    target = DailyCheck.next_run(datetime.now(), hm)
+    while True:
+        if datetime.now() >= target:
+            try:
+                await fire()
+            except Exception:  # noqa: BLE001
+                log.exception("%s boshlanmadi", name)
+            target = DailyCheck.next_run(datetime.now(), hm)
+        await asyncio.sleep(min(60.0, max(1.0, (target - datetime.now()).total_seconds())))
+
+
+class ReelsDaily:
+    """REELS_PREPARE_AT (HH:MM) da: kunlik Reels hisoboti va (pauzada emas, reja to'lmagan bo'lsa) tayyorlash topshirig'i."""
+
+    def __init__(self, cfg: Config, paths: Paths, journal: Journal, submit: Submit, new_id: Callable[[], str],
+                 notify: Notify):
+        self.cfg, self.paths, self.journal = cfg, paths, journal
+        self.submit, self.new_id, self.notify = submit, new_id, notify
+
+    async def fire(self) -> str | None:
+        from .studio.pipeline import daily_prompt, status_report
+        from .studio.store import StudioStore
+
+        store = StudioStore(self.paths.studio)
+        await self.notify(status_report(store, self.cfg.reels_per_day))
+        if store.setting("paused") == "1":
+            self.journal.event("reels_daily", "Kunlik Reels pauzada — tayyorlanmadi")
+            return None
+        need = self.cfg.reels_per_day - store.count_today()
+        if need <= 0:
+            return None
+        req = TaskRequest(id=self.new_id(), auto=True, notes=[REELS_NOTE], text=daily_prompt(store, need))
+        tid = await self.submit(req)
+        self.journal.event("reels_daily", f"Kunlik Reels {tid or 'boshlanmadi'} ({need} ta)", task=tid, count=need)
+        return tid
+
+    async def run(self) -> None:
+        await run_daily(self.cfg.reels_prepare_at, self.fire, "Kunlik Reels")
 
 
 def start(cfg: Config, paths: Paths, inventory: Inventory, journal: Journal, redactor: Redactor, tasks,
@@ -281,4 +318,8 @@ def start(cfg: Config, paths: Paths, inventory: Inventory, journal: Journal, red
     """Xizmat ichida fon vazifalar sifatida ishga tushiradi (tasks — TaskManager)."""
     zabbix = ZabbixWatcher(cfg, paths, inventory, journal, redactor, tasks.submit, tasks.new_id, notify)
     daily = DailyCheck(cfg, paths, journal, tasks.submit, tasks.new_id)
-    return [asyncio.create_task(zabbix.run(), name="zabbix-kuzatuv"), asyncio.create_task(daily.run(), name="kunlik")]
+    jobs = [asyncio.create_task(zabbix.run(), name="zabbix-kuzatuv"), asyncio.create_task(daily.run(), name="kunlik")]
+    if cfg.reels_enabled:
+        reels = ReelsDaily(cfg, paths, journal, tasks.submit, tasks.new_id, notify)
+        jobs.append(asyncio.create_task(reels.run(), name="kunlik-reels"))
+    return jobs

@@ -12,7 +12,7 @@ import time
 
 from .. import gate
 from ..inventory import PlaceholderError
-from . import files, http_api, knowledge, owner, powershell, ssh, verify
+from . import files, http_api, knowledge, owner, powershell, reels, ssh, verify
 from .base import ToolContext, ToolResult, ToolSpec, validate_args
 
 _INJECTION = re.compile(
@@ -79,6 +79,13 @@ def build_specs() -> list[ToolSpec]:
                  "tasdig'i so'raladi. Telegram: faqat oxirgi 24 soatda yozgan suhbatga.", owner.BUSINESS_SEND_SCHEMA,
                  owner.send_business_message, owner.classify_business_send,
                  lambda a: f"{a.get('chat', '')}: {str(a.get('text', ''))[:200]}", counts_as_work=False),
+        ToolSpec("reel_render", "Instagram Reels: skriptdan o'zbekcha ovozli, kirill subtitrli animatsion video (1080x1920) "
+                 "yasaydi, sifatini tekshiradi va egasiga Telegram'da tasdiq tugmalari bilan yuboradi. Joylamaydi — "
+                 "joylash faqat egasi tasdiqlagan versiya bilan (2-bosqich).", reels.RENDER_SCHEMA, reels.reel_render,
+                 reels.classify, lambda a: str((a.get("script") or {}).get("title", ""))[:200]),
+        ToolSpec("reel_list", "Instagram Reels ro'yxati va holati (mavzular takrorlanmasligi, rad etilganlar sababi).",
+                 reels.LIST_SCHEMA, reels.reel_list, reels.classify, lambda a: str(a.get("state") or ""),
+                 counts_as_work=False),
     ]
 
 

@@ -50,6 +50,8 @@ HELP = """IT-agent buyruqlari:
 • /bekor — kutilayotgan savol/parol so'rovini bekor qilish.
 • /parol <nom> — agent yaratgan parolni ko'rish (60 s dan keyin o'chiriladi).
 • /skill — skillar ro'yxati.   • /xulosa — haftalik xulosa hozir.   • /limit — Claude obuna limiti holati.
+• /reels — Instagram Reels holati.   • /reels_tayyorla [soni] — hozir tayyorlash.
+• /reels_pauza, /reels_davom — kunlik tayyorlashni to'xtatish / davom ettirish.
 Tasdiq so'rovlariga "ha" yoki "yo'q" (yoki tugmalar). Javob bo'lmasa — amal bajarilmaydi."""
 
 
@@ -75,6 +77,8 @@ class TelegramBot:
         self.tasks = None  # TaskManager — app.py da o'rnatiladi
         self.weekly_fn = None  # () -> str
         self.stt = None  # Transcriber — app.py da o'rnatiladi (cfg.stt_enabled bo'lsa)
+        self.studio = None  # StudioStore — app.py da o'rnatiladi (cfg.reels_enabled bo'lsa)
+        self._reel_replies: dict[int, tuple[str, str]] = {}  # xabar id -> (rev|rej|time, reel id)
         self.chat_id = cfg.allowed_chat_id
         self.business = BusinessStore(paths.ish / "business.json")
         self.started_at = time.time()
@@ -106,6 +110,14 @@ class TelegramBot:
         except (TelegramError, OSError) as exc:
             log.error("Fayl yuborilmadi: %s", exc)
             await self.send_text(f"Faylni yuborib bo'lmadi ({type(exc).__name__}). Yo'li: {path}")
+
+    async def send_video(self, path: Path, caption: str = "", buttons: dict | None = None) -> dict | None:
+        try:
+            return await self.api.send_video(self.chat_id, path, self.redactor.redact(caption), reply_markup=buttons)
+        except (TelegramError, OSError) as exc:
+            log.error("Video yuborilmadi: %s", exc)
+            await self.send_text(f"Videoni yuborib bo'lmadi ({type(exc).__name__}). Yo'li: {path}", reply_markup=buttons)
+            return None
 
     async def send_outcome(self, outcome: TaskOutcome) -> None:
         await self.send_text(outcome.text)
@@ -208,6 +220,10 @@ class TelegramBot:
         if text.startswith("/"):
             await self._on_command(msg, text)
             return
+        if reply_to in self._reel_replies and text:
+            kind, rid = self._reel_replies.pop(reply_to)
+            await self._on_reel_reply(kind, rid, text)
+            return
 
         target = self.pending.by_message(reply_to)
         answer = norm_answer(text)
@@ -244,8 +260,77 @@ class TelegramBot:
             p = self.pending.get(pid)
             ok = p is not None and p.kind == "approval" and self.pending.resolve(pid, value == "y")
             await self.api.answer_callback(cq["id"], "Qabul qilindi" if ok else "Bu so'rov eskirgan")
+        elif data.startswith("rl:"):
+            parts = data.split(":")
+            if len(parts) == 4 and parts[2].isdigit():
+                await self._on_reel_action(cq, parts[1], int(parts[2]), parts[3])
+            else:
+                await self.api.answer_callback(cq["id"], "Noto'g'ri tugma")
         else:
             await self.api.answer_callback(cq["id"])
+
+    # ------------------------------------------------------------ Instagram Reels tasdig'i
+    async def _on_reel_action(self, cq: dict, rid: str, version: int, act: str) -> None:
+        """Faqat egasi (authorized tekshirilgan). Tasdiq aynan shu versiya va sha256 ga bog'lanadi."""
+        if self.studio is None:
+            await self.api.answer_callback(cq["id"], "Reels studiyasi o'chiq (REELS_ENABLED=0)")
+            return
+        reel = self.studio.get(rid)
+        if reel is None or reel["version"] != version:
+            await self.api.answer_callback(cq["id"], "Bu versiya eskirgan — oxirgi videoni ko'ring")
+            return
+        texts = {
+            "rev": (f"✏️ {rid}: nimani o'zgartiray? Fikringizni SHU xabarga reply qilib yozing.", "REVISION_REQUESTED"),
+            "rej": (f"❌ {rid} rad etildi. Sababini shu xabarga reply qilib yozsangiz, keyingi mavzularda hisobga olaman.",
+                    "REJECTED"),
+            "time": (f"🕒 {rid}: qachon joylansin? Masalan: 19:30, ertaga 09:00 yoki 01.11 19:30 "
+                     "(shu xabarga reply qiling).", None),
+        }
+        try:
+            if act == "ok":
+                digest = self.studio.approve(rid, version)
+                reply = (f"✅ {rid} v{version} tasdiqlandi (sha256 {digest[:12]}…). Instagram hali ulanmagan — video "
+                         "navbatda saqlanadi, 2-bosqichda aynan shu versiya joylanadi.")
+            elif act in texts:
+                reply, new_state = texts[act]
+                if new_state:
+                    self.studio.transition(rid, new_state, "egasi", "")
+            else:
+                await self.api.answer_callback(cq["id"], "Noma'lum amal")
+                return
+        except Exception as exc:  # noqa: BLE001 — TransitionError va fayl xatolari egasiga ko'rsatiladi
+            await self.api.answer_callback(cq["id"], str(exc)[:190])
+            return
+        await self.api.answer_callback(cq["id"], "Qabul qilindi")
+        self.journal.event("reel", f"{rid} v{version}: {act}", reel=rid, version=version, action=act)
+        message_id = (cq.get("message") or {}).get("message_id")
+        if act != "time" and message_id:
+            await self.api.edit_reply_markup(self.chat_id, message_id, None)
+        sent = await self.send_text(reply)
+        if act != "ok" and sent:
+            self._reel_replies[sent["message_id"]] = (act, rid)
+
+    async def _on_reel_reply(self, kind: str, rid: str, text: str) -> None:
+        from .studio.pipeline import parse_when, revision_prompt
+
+        if kind == "rev":
+            req = TaskRequest(id=self.tasks.new_id(), text=revision_prompt(self.studio, rid, text))
+            await self.tasks.submit(req)
+            await self.send_text(f"✏️ {rid}: qabul qilindi — qayta ishlayapman, yangi versiya tayyor bo'lgach yuboraman.")
+        elif kind == "rej":
+            self.studio.set_note(rid, text[:500])
+            await self.send_text("Sabab saqlandi — shunga o'xshash mavzular takrorlanmaydi.")
+        elif kind == "time":
+            when = parse_when(text)
+            if when is None:
+                sent = await self.send_text("Vaqtni tushunmadim. Masalan: 19:30, ertaga 09:00 yoki 01.11 19:30 "
+                                            "(shu xabarga reply qiling).")
+                if sent:
+                    self._reel_replies[sent["message_id"]] = ("time", rid)
+                return
+            self.studio.set_schedule(rid, when)
+            await self.send_text(f"🕒 {rid}: {when:%d.%m %H:%M} ga belgilandi. Joylash 2-bosqichda (Instagram ulangach) "
+                                 "ishlaydi; video baribir faqat tasdiqingiz bilan joylanadi.")
 
     # ------------------------------------------------------------ buyruqlar
     async def _on_command(self, msg: dict, text: str) -> None:
@@ -281,6 +366,8 @@ class TelegramBot:
         elif cmd == "/xulosa":
             if self.weekly_fn:
                 self._spawn(self._weekly_now())
+        elif cmd.startswith("/reels"):
+            await self._reels_command(cmd, rest)
         elif cmd in ("/limit", "/xarajat"):
             runner = self.tasks.runner
             blocked = runner.unavailable_reason()
@@ -288,6 +375,28 @@ class TelegramBot:
                                              "Pullik API ishlatilmaydi; limit tugasa agent to'xtaydi."))
         else:
             await self.send_text("Noma'lum buyruq. /help")
+
+    async def _reels_command(self, cmd: str, rest: str) -> None:
+        if self.studio is None:
+            await self.send_text("Instagram Reels studiyasi o'chiq. Yoqish: .env da REELS_ENABLED=1 va agentni qayta "
+                                 "ishga tushirish.")
+            return
+        from .studio.pipeline import daily_prompt, status_report
+
+        if cmd == "/reels":
+            await self.send_text(status_report(self.studio, self.cfg.reels_per_day))
+        elif cmd == "/reels_pauza":
+            self.studio.set_setting("paused", "1")
+            await self.send_text("⏸ Kunlik Reels tayyorlash to'xtatildi. Davom ettirish: /reels_davom")
+        elif cmd == "/reels_davom":
+            self.studio.set_setting("paused", "0")
+            await self.send_text("▶️ Kunlik Reels tayyorlash davom etadi.")
+        elif cmd == "/reels_tayyorla":
+            count = int(rest) if rest.isdigit() and 1 <= int(rest) <= 5 else 1
+            await self.tasks.submit(TaskRequest(id=self.tasks.new_id(), text=daily_prompt(self.studio, count)))
+            await self.send_text(f"🎬 {count} ta Reels tayyorlash boshlandi — har biri tayyor bo'lgach tasdiqqa keladi.")
+        else:
+            await self.send_text("Reels buyruqlari: /reels, /reels_tayyorla [soni], /reels_pauza, /reels_davom")
 
     async def _weekly_now(self) -> None:
         try:
@@ -421,6 +530,9 @@ class TelegramChannel(OwnerChannel):
 
     async def send_file(self, path: Path, caption: str = "") -> None:
         await self.bot.send_file(path, caption)
+
+    async def send_video(self, path: Path, caption: str = "", buttons: dict | None = None) -> None:
+        await self.bot.send_video(path, caption, buttons)
 
     async def request_approval(self, text: str) -> bool:
         return await self.bot.request_approval(self.task_id, text)

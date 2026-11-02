@@ -6,8 +6,12 @@ httpx>=0.27,<1
 faster-whisper>=1.2,<2
 python-dotenv>=1.0
 
-# Ustki panel (oynacha) — silliq dizayn uchun rasm chizish (gradient, yumshoq burchaklar, maskot)
+# Ustki panel (oynacha) va Reels kadrlari — rasm chizish (gradient, yumshoq burchaklar, matn)
 pillow>=10.0
+
+# Reels studiyasi va ovozli xabar: ffmpeg (paket ichida keladi) va TTS (Azure kaliti bo'lmasa edge-tts)
+imageio-ffmpeg>=0.5
+edge-tts>=7.0
 
 # Masofaviy ulanish
 requests>=2.32
