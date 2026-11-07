@@ -16,6 +16,10 @@ class TelegramError(Exception):
     pass
 
 
+class TelegramNetworkError(TelegramError):
+    """Telegram'ga umuman yetib bo'lmadi (internet yo'q, DNS, timeout) — token yoki so'rov xatosi emas."""
+
+
 class TelegramAPI:
     def __init__(self, token: str, client: httpx.AsyncClient | None = None):
         self._base = f"https://api.telegram.org/bot{token}"
@@ -35,7 +39,7 @@ class TelegramAPI:
             except (httpx.HTTPError, ValueError) as exc:
                 # Xato matnida URL (token bilan) bo'lishi mumkin — faqat turini ko'rsatamiz.
                 if attempt >= retries:
-                    raise TelegramError(f"{method}: tarmoq xatosi ({type(exc).__name__})") from None
+                    raise TelegramNetworkError(f"{method}: tarmoq xatosi ({type(exc).__name__})") from None
                 await asyncio.sleep(min(30, 2 ** attempt))
                 continue
             if data.get("ok"):
@@ -51,7 +55,7 @@ class TelegramAPI:
         return await self.call("getMe")
 
     async def get_updates(self, offset: int | None, timeout: int = 50) -> list[dict]:
-        payload: dict = {"timeout": timeout, "allowed_updates": ["message", "callback_query", "business_connection", "business_message", "edited_business_message", "deleted_business_messages"]}
+        payload: dict = {"timeout": timeout, "allowed_updates": ["message", "callback_query", "my_chat_member", "business_connection", "business_message", "edited_business_message", "deleted_business_messages"]}
         if offset is not None:
             payload["offset"] = offset
         return await self.call("getUpdates", payload, timeout=timeout + 20, retries=0) or []

@@ -39,6 +39,9 @@ from .inventory import Inventory
 from .journal import Journal
 from .memory import build_context
 from .redact import Redactor
+from .artifacts import intent as art_intent
+from .artifacts import tracker as art_tracker
+from .artifacts.store import ActiveTaskStore
 from .tools import ToolContext, ToolExecutor
 from .workspace import Paths
 
@@ -221,6 +224,23 @@ class AgentRunner:
             items.append("o'zgartirishdan keyin verify bilan natijani QAYTA o'lcha (PASS bo'lishi kerak)")
         if ctx.mutations and not ctx.history_logged:
             items.append("log_history bilan tarix.md ga yoz (kategoriya, belgi, sabab, tuzatish, natija, saboq)")
+        af = art_tracker.facts(ctx)
+        if af.failed:
+            items.append(f"{af.names(af.failed)} tekshiruvdan O'TMADI — xatoni aniq tuzat (formula/qiymat/yo'qolgan qism) "
+                         "va verify_artifact bilan qayta tekshir; 2 urinishda tuzalmasa, sababni ochiq yoz")
+        if af.followup_unapplied:
+            items.append(f"Jamshid faol faylni ({Path(af.followup_file).name}) o'zgartirishni so'radi, lekin fayl O'ZGARMADI. "
+                         "Javobni faqat chatda berma: o'zgarishni AYNAN shu faylga kirit (excel_total yoki skript), "
+                         "verify_artifact, notify_owner(file_path=...)")
+        if af.unverified:
+            items.append(f"{af.names(af.unverified)} yaratildi/o'zgardi, lekin joriy versiyasi tekshirilmadi — "
+                         "verify_artifact (asosiy jami qiymatlarni o'zing hisoblab expect ga ber)")
+        if af.undelivered and not af.failed:
+            items.append(f"{af.names(af.undelivered)} Jamshidga yuborilmadi — agar bu uning uchun natija bo'lsa, "
+                         "notify_owner(file_path=...) bilan yubor")
+        if (ctx.chart or {}).get("state") == "unverified":
+            items.append("TradingView grafigi TASDIQLANMAGAN — 'chizildi/qo'shildi' dema: hisobotda PARTIAL, Pine fayl, "
+                         "o'rnatish qadamlari; egasi qo'shgach tradingview_verify")
         if (ctx.successful_calls >= 3 and not ctx.skill_written and not matched_skill
                 and ctx.last_verify_ok is not False and ctx.consecutive_failures == 0):
             items.append("bu ish uchun skill yo'q — write_skill bilan HAQIQATAN ishlagan buyruqlar asosida skill yoz")
@@ -235,8 +255,13 @@ class AgentRunner:
         verified: bool | None = None
         if ctx.mutations:
             verified = ctx.verified_after_mutation and bool(ctx.last_verify_ok)
+        af = art_tracker.facts(ctx)
         facts = verification.Facts(mutated=bool(ctx.mutations), verified=bool(verified),
-                                   verify_failed=ctx.last_verify_ok is False, run_code=code)
+                                   verify_failed=ctx.last_verify_ok is False, run_code=code,
+                                   artifacts_unverified=tuple(Path(x).name for x in af.unverified),
+                                   artifacts_failed=tuple(Path(x).name for x in af.failed),
+                                   followup_unapplied=af.followup_unapplied,
+                                   chart_state=(ctx.chart or {}).get("state"))
         text, final_status = verification.apply(self.redactor.redact(text or ""), facts)
         file = None
         lines = [ln for ln in text.splitlines() if ln.strip()]
@@ -246,6 +271,9 @@ class AgentRunner:
             file.write_text(text + "\n", encoding="utf-8")
             text = "\n".join(lines[:5]) + "\n(To'liq hisobot fayl sifatida yuborildi.)"
         mark = "" if not ctx.mutations else (" · ✅ tekshirilgan" if verified else " · ⚠️ tekshirilmagan")
+        for path in list(ctx.delivered)[-2:]:
+            ok = path not in af.failed and path not in af.unverified
+            mark += f" · 📎 {Path(path).name} {'✅' if ok else '⚠️'}"
         plan = self.plan + (f" ({status.plan_note})" if status.plan_note else "")
         footer = f"\n— {req.id} · {status.steps} amal · {_elapsed(time.monotonic() - status.started)}{mark} · {plan}"
         final = text + footer
@@ -263,7 +291,61 @@ class AgentRunner:
             cache_read_tokens=status.cache_read_tokens, mutated=bool(ctx.mutations), verified=verified,
             approvals=ctx.approvals, history=ctx.history_logged, skill=ctx.skill_written,
         )
+        self._update_artifacts(req, ctx, af)
         return TaskOutcome(task_id=req.id, text=final, status=code, file=file, mutated=bool(ctx.mutations), verified=verified)
+
+    # --- faol ish konteksti va artefaktlar ------------------------------------------------------------------------
+    def _prepare_artifacts(self, req: TaskRequest, ctx: ToolContext) -> str:
+        """Faol ishni aniqlaydi (follow-up / biriktirilgan fayl), fayl kuzatuvini boshlaydi. -> prompt bo'limi."""
+        try:
+            store = ActiveTaskStore(self.paths.ish)
+            res = art_intent.resolve(req.text, req.notes, store)
+            file = res.file if (res.followup or res.attached) else None
+            store.start_task(req.id, req.text, followup=res.followup, file=file)
+            home = Path.home()
+            roots = [self.paths.ish] + [d for d in (home / "Desktop", home / "Documents", home / "Downloads") if d.is_dir()]
+            tr = art_tracker.Tracker(roots=roots, deep_roots=[ctx.work_dir])
+            if file is not None and file.is_file():
+                if file.parent.resolve() not in [r.resolve() for r in roots]:
+                    tr.roots.append(file.parent)
+                store.record_version(file, req.id, origin="user" if res.attached else "agent")  # o'zgarishdan oldingi nusxa
+            tr.start()
+            ctx.tracker, ctx.artifact_store, ctx.resolution = tr, store, res
+            store.save()
+            if res.followup or res.attached:
+                where = f" Ishchi fayl: {res.file}." if res.file else ""
+                req.notes.append(f"[Kod: bu xabar faol ishga tegishli ({res.reason}).{where} Batafsil — tizim "
+                                 "promptidagi FAOL ISH bo'limi.]")
+            return store.context_block(res)
+        except Exception:  # noqa: BLE001 — kontekst topilmasa ham topshiriq bajarilaveradi
+            log.exception("faol ish konteksti tayyorlanmadi")
+            return ""
+
+    def _update_artifacts(self, req: TaskRequest, ctx: ToolContext, af: art_tracker.ArtifactFacts) -> None:
+        store = ctx.artifact_store
+        if store is None:
+            return
+        try:
+            touched = list(dict.fromkeys(af.changed + list(ctx.delivered)))
+            for path in touched:
+                if not Path(path).is_file():
+                    continue
+                check = ctx.artifact_checks.get(path) or {}
+                cur = art_tracker.sha256(path)
+                good = check.get("sha") == cur and check.get("ok") and check.get("verified") and not check.get("forced")
+                store.record_version(path, req.id, verified=bool(good), summary=check.get("summary", ""))
+                if ctx.delivered.get(path) == cur:
+                    store.mark_delivered(path, cur, req.id)
+            chosen = (list(ctx.delivered) or af.changed or [None])[-1]
+            if chosen:
+                store.set_active_file(chosen)
+            elif store.data.get("active") and store.data["active"].get("file"):
+                store.set_active_file(store.data["active"]["file"])
+            store.set_pending([req.text] if af.followup_unapplied else [])
+            store.set_validation(ctx.validation_requirements)
+            store.save()
+        except Exception:  # noqa: BLE001
+            log.exception("faol ish konteksti yangilanmadi")
 
     async def run(self, req: TaskRequest, channel: OwnerChannel, status: TaskStatus | None = None) -> TaskOutcome:
         status = status or TaskStatus()
@@ -282,7 +364,8 @@ class AgentRunner:
             context_text, selected = build_context(query=req.text, home=self.paths.home, task_id=req.id, model=model,
                                                    inventory_public=self.inventory.public_view(),
                                                    chat_path=self.paths.chat_history)
-            system_text = "\n\n".join([self.static_system, context_text, TOOL_NOTE])
+            active_text = self._prepare_artifacts(req, ctx)
+            system_text = "\n\n".join(p for p in [self.static_system, context_text, active_text, TOOL_NOTE] if p)
             async with asyncio.timeout(self.cfg.task_timeout if self.cfg.task_timeout > 0 else None):
                 text, code = await self._session(req, ctx, status, channel, model, effort, system_text,
                                                  bool(selected), session_id)

@@ -5,13 +5,16 @@ Kod uni topshiriq faktlari bilan solishtiradi:
   - o'zgartirish bo'lgan, lekin oxirgi verify FAIL     -> SUCCESS bo'la olmaydi: FAILED;
   - o'zgartirish bo'lgan, lekin keyin verify PASS yo'q -> SUCCESS bo'la olmaydi: PARTIAL;
   - qadam/vaqt chegarasi tugagan                         -> SUCCESS bo'la olmaydi: PARTIAL;
+  - yaratilgan/o'zgargan hujjat tekshiruvdan o'tmagan   -> SUCCESS bo'la olmaydi: FAILED;
+  - follow-up faylni o'zgartirishni so'ragan, fayl o'zgarmagan -> PARTIAL;
+  - hujjat yaratilgan/o'zgargan, lekin joriy versiyasi tekshirilmagan -> PARTIAL (tool xatosiz tugagani yetmaydi);
   - model rad etgan / ichki xato                         -> BLOCKED / FAILED.
 Model aniqroq muvaffaqiyatsiz holat bergan bo'lsa (masalan NEEDS_AUTH) — o'shanisi qoladi.
 """
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 STATUSES = ("SUCCESS", "PARTIAL", "NEEDS_SETUP", "NEEDS_AUTH", "FAILED", "BLOCKED")
 ICONS = {"SUCCESS": "✅", "PARTIAL": "⚠️", "NEEDS_SETUP": "🔧", "NEEDS_AUTH": "🔐", "FAILED": "❌", "BLOCKED": "⛔"}
@@ -29,6 +32,10 @@ class Facts:
     verified: bool  # oxirgi o'zgarishdan keyin verify PASS
     verify_failed: bool  # oxirgi verify FAIL
     run_code: str  # agent sikli natijasi: ok | limit | refusal | error
+    artifacts_unverified: tuple[str, ...] = field(default=())  # joriy versiyasi tekshirilmagan hujjatlar (nomlari)
+    artifacts_failed: tuple[str, ...] = field(default=())  # tekshiruvdan o'tmagan (yoki majburan yuborilgan) hujjatlar
+    followup_unapplied: bool = False  # follow-up faylni o'zgartirishni so'ragan, lekin fayl o'zgarmagan
+    chart_state: str | None = None  # TradingView: confirmed | unverified | needs_setup | invalid
 
 
 ALIASES = {"NEEDS_AUTHORIZATION": "NEEDS_AUTH"}  # V5 dagi to'liq nom
@@ -48,14 +55,30 @@ def decide(claimed: str | None, facts: Facts) -> tuple[str | None, str | None]:
         return "BLOCKED", None if claimed == "BLOCKED" else "model so'rovni rad etdi"
     if facts.run_code == "error":
         return "FAILED", None if claimed == "FAILED" else "ichki xato"
+    reasons: list[tuple[str, str]] = []
     if facts.mutated and facts.verify_failed:
-        forced = "FAILED", "o'zgarishdan keyingi tekshiruv (verify) o'tmadi"
+        reasons.append(("FAILED", "o'zgarishdan keyingi tekshiruv (verify) o'tmadi"))
     elif facts.mutated and not facts.verified:
-        forced = "PARTIAL", "o'zgarishdan keyin qayta o'lchanmadi"
-    elif facts.run_code == "limit":
-        forced = "PARTIAL", "qadam yoki vaqt chegarasi tugadi"
-    else:
-        forced = None
+        reasons.append(("PARTIAL", "o'zgarishdan keyin qayta o'lchanmadi"))
+    if facts.artifacts_failed:
+        reasons.append(("FAILED", "fayl tekshiruvdan o'tmadi: " + ", ".join(facts.artifacts_failed[:3])))
+    if facts.followup_unapplied:
+        reasons.append(("PARTIAL", "so'ralgan o'zgarish faylga kiritilmadi"))
+    if facts.artifacts_unverified:
+        reasons.append(("PARTIAL", "fayl tekshirilmagan: " + ", ".join(facts.artifacts_unverified[:3])))
+    if facts.chart_state == "invalid":
+        reasons.append(("FAILED", "Pine Script tayyorlanmadi yoki tekshiruvdan o'tmadi"))
+    elif facts.chart_state == "needs_setup":
+        reasons.append(("NEEDS_SETUP", "TradingView integratsiyasi/qurilmasi tayyor emas"))
+    elif facts.chart_state == "unverified":
+        reasons.append(("PARTIAL", "TradingView grafigida annotatsiyalar tasdiqlanmagan"))
+    if facts.run_code == "limit" and not reasons:
+        reasons.append(("PARTIAL", "qadam yoki vaqt chegarasi tugadi"))
+    forced = None
+    if reasons:
+        order = ("FAILED", "NEEDS_SETUP", "PARTIAL")
+        worst = next(o for o in order if any(st == o for st, _ in reasons))
+        forced = worst, "; ".join(r for st, r in reasons if st == worst)
     if forced:
         if claimed in (None, "SUCCESS"):
             return forced

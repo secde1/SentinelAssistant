@@ -6,6 +6,7 @@ import json
 import re
 
 from .. import gate
+from ..artifacts import is_artifact, sha256, tracker
 from ..inventory import normalize_type
 from ..redact import MASK, is_secret_key
 from .base import ToolContext, ToolResult
@@ -39,7 +40,18 @@ def parse_credential_reply(text: str, fields: list[str]) -> dict:
 
 
 # ---------------------------------------------------------------- ask / notify
+_WHICH_FILE = re.compile(
+    r"(qaysi|қайси|какой|какую|which)\s+(fayl|файл|file|excel|эксел|smeta|смета|jadval|жадвал|hujjat|ҳужжат|хужжат|"
+    r"varaq|варақ|документ|таблиц)", re.I)
+
+
 async def ask_owner(ctx: ToolContext, args: dict) -> ToolResult:
+    res = getattr(ctx, "resolution", None)
+    if (res is not None and res.followup and res.file is not None and not res.ambiguous
+            and _WHICH_FILE.search(args.get("question", ""))):
+        # Faol ish va fayl aniq — Jamshidni keraksiz savol bilan bezovta qilmaymiz.
+        return ToolResult(True, f"Javob (kod, Jamshidga so'ralmadi): ishchi fayl aniq — {res.file}. Shu fayl bilan "
+                                "davom et.")
     if ctx.questions_asked >= ctx.cfg.max_questions_per_task:
         return ToolResult(False, f"Bu topshiriqda savol limiti ({ctx.cfg.max_questions_per_task}) tugadi. Eng oqilona "
                                  "va xavfsiz variant bilan davom et yoki hisobotda aniq nima kerakligini yoz.")
@@ -59,8 +71,17 @@ async def notify_owner(ctx: ToolContext, args: dict) -> ToolResult:
             return ToolResult(False, "maxfiy papkadagi faylni yuborib bo'lmaydi")
         if not path.is_file():
             return ToolResult(False, f"Fayl topilmadi: {path}")
+        report = ""
+        if is_artifact(path):
+            ok, report = tracker.prepare_delivery(ctx, path, force=bool(args.get("force_unverified")))
+            if not ok:
+                return ToolResult(False, report)
+            if args.get("force_unverified") and "force_unverified" in report:
+                text = ("⚠️ Tekshiruvdan o'tmagan fayl. " + text).strip()
         await ctx.channel.send_file(path, text)
-        return ToolResult(True, f"Fayl yuborildi: {path.name}")
+        if is_artifact(path):
+            ctx.delivered[str(path.resolve())] = sha256(path)
+        return ToolResult(True, f"Fayl yuborildi: {path.name}" + (f"\n{report}" if report else ""))
     if not text.strip():
         return ToolResult(False, "text bo'sh")
     await ctx.channel.send(text)
@@ -174,7 +195,9 @@ BUSINESS_SEND_SCHEMA = {"type": "object", "properties": {
 ASK_SCHEMA = {"type": "object", "properties": {"question": {"type": "string", "description": "BITTA eng muhim savol."}},
               "required": ["question"]}
 NOTIFY_SCHEMA = {"type": "object", "properties": {
-    "text": {"type": "string"}, "file_path": {"type": "string", "description": "Ixtiyoriy: yuboriladigan fayl (hisobot, jadval)."}},
+    "text": {"type": "string"}, "file_path": {"type": "string", "description": "Ixtiyoriy: yuboriladigan fayl (hisobot, jadval)."},
+    "force_unverified": {"type": "boolean", "description": "Faqat tuzatib bo'lmaydigan holatda: tekshiruvdan o'tmagan "
+                                                           "faylni ogohlantirish bilan yuborish (holat SUCCESS bo'lmaydi)."}},
     "required": ["text"]}
 CRED_SCHEMA = {"type": "object", "properties": {
     "name": {"type": "string", "description": "Inventar nomi, masalan 'mikrotik-asosiy', 'unifi-controller', 'srv-file01'."},

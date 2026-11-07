@@ -64,6 +64,10 @@ def _rx(pattern: str) -> re.Pattern[str]:
 
 # ---------------------------------------------------------------- PowerShell
 _PS_DANGER: list[tuple[re.Pattern[str], str, str]] = [(_rx(p), c, r) for p, c, r in [
+    (r"\bSendKeys\b|\bSendWait\b|\bkeybd_event\b|\bmouse_event\b|\bSendInput\b|\bSetCursorPos\b|\bpyautogui\b"
+     r"|\bpynput\b|\bAutoHotkey\b|\bInvokePattern\b|\bValuePattern\b|\bLegacyIAccessiblePattern\b",
+     "gui_input", "Kor-korona GUI kiritish (klaviatura/sichqoncha simulyatsiyasi): oyna holatini ko'rmasdan bosish "
+                  "boshqa oynani yopishi yoki noto'g'ri amal bajarishi mumkin"),
     (r"\b(?:Restart|Stop)-Computer\b", "power", "Server qayta yuklanadi yoki o'chadi"),
     (r"\bshutdown(?:\.exe)?\s+(?:[/-]\w+\s+)*?[/-](?:r|s|p|g|h|hybrid)\b", "power", "shutdown buyrug'i"),
     (r"\b(?:Stop|Restart|Suspend|Save|Remove|Reset)-VM\b", "power", "VM o'chiriladi / qayta yuklanadi"),
@@ -190,6 +194,27 @@ _CREDENTIAL_REASON = ("login/kalit saqlanadigan joyga murojaat taqiqlangan (brau
                       "logini, Windows Credential Manager, parol menejeri)")
 
 
+# Real savdo: SENTINAL faqat tadqiqot va qog'oz savdo. Buyurtma API'lari faqat egasining tasdig'i bilan (DANGER); agentning o'zida buyurtma kodi yo'q.
+_TRADE_ORDER = _rx(r"\border_send\b|\bOrderSend(?:Async)?\s*\(|\bTRADE_ACTION_(?:DEAL|PENDING|SLTP|MODIFY|REMOVE|CLOSE_BY)\b"
+                   r"|\bCTrade\b|\bPosition(?:Close|Modify)\s*\(|\bcreate_(?:market_|limit_)?(?:buy_|sell_)?order\b"
+                   r"|\bnew_order\b|\border_(?:market|limit)_(?:buy|sell)\b|\bfutures_create_order\b|\bplace_order\b")
+_TRADE_REASON = ("Real savdo buyrug'i (order): broker yoki birjaga haqiqiy buyurtma yuboradi — faqat egasining tasdig'i bilan")
+# MT5: initialize() yopiq terminalni o'zi ishga tushiradi; Exness terminali REAL hisobda — faqat egasining tasdig'i bilan.
+_MT5_DIRECT = _rx(r"\bimport\s+MetaTrader5\b|\bfrom\s+MetaTrader5\s+import\b|\bStart-Process\b[^|;\n]*terminal64"
+                  r"|&\s*['\"]?[^'\"\n|;]*terminal64\.exe")
+_MT5_REASON = ("MT5 terminaliga to'g'ridan-to'g'ri murojaat: initialize() yopiq terminalni o'zi ishga tushiradi (Exness "
+               "terminali REAL hisobda). Faqat o'qish uchun trading_mt5_status tool'ini ishlating")
+
+
+def trading_risk(text: str) -> tuple[str, str, str] | None:
+    """Skript yoki buyruq matnidagi savdo xavfi: (daraja, sabab, kategoriya) yoki None."""
+    if _TRADE_ORDER.search(text or ""):
+        return DANGER, _TRADE_REASON, "real_trade"
+    if _MT5_DIRECT.search(text or ""):
+        return DANGER, _MT5_REASON, "broker_terminal"
+    return None
+
+
 def credential_store_ref(text: str) -> bool:
     return bool(_CREDENTIAL_STORES.search(text or ""))
 
@@ -224,6 +249,9 @@ def classify_powershell(command: str, host: str = "localhost", extra_texts: list
                           "secret_access")
     if credential_store_ref(text):
         return d.escalate(BLOCK, _CREDENTIAL_REASON, "secret_access")
+    risk = trading_risk(text)
+    if risk:
+        d.escalate(*risk)
     for rx, cat, reason in _PS_DANGER:
         if rx.search(text):
             d.escalate(DANGER, reason, cat)

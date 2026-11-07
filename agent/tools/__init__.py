@@ -12,7 +12,7 @@ import time
 
 from .. import gate
 from ..inventory import PlaceholderError
-from . import files, http_api, knowledge, owner, powershell, reels, ssh, verify
+from . import artifacts, files, http_api, knowledge, owner, powershell, reels, ssh, trading, tradingview, verify
 from .base import ToolContext, ToolResult, ToolSpec, validate_args
 
 _INJECTION = re.compile(
@@ -53,6 +53,12 @@ def build_specs() -> list[ToolSpec]:
                  "HAQIQATAN ishlagan buyruqlar; parol emas, placeholder.", knowledge.SKILL_SCHEMA, knowledge.write_skill,
                  knowledge.classify, _summary_cmd("name"), counts_as_work=False),
         ToolSpec("verify", verify.DESCRIPTION, verify.SCHEMA, verify.handler, verify.classify, verify.summary),
+        ToolSpec("inspect_artifact", artifacts.INSPECT_DESCRIPTION, artifacts.INSPECT_SCHEMA, artifacts.inspect_artifact,
+                 artifacts.classify_read, artifacts.summary, counts_as_work=False),
+        ToolSpec("verify_artifact", artifacts.VERIFY_DESCRIPTION, artifacts.VERIFY_SCHEMA, artifacts.verify_artifact,
+                 artifacts.classify_read, artifacts.summary, counts_as_work=False),
+        ToolSpec("excel_total", artifacts.TOTAL_DESCRIPTION, artifacts.TOTAL_SCHEMA, artifacts.excel_total,
+                 artifacts.classify_total, artifacts.summary),
         ToolSpec("log_history", "Hal qilingan muammoni xotira/tarix.md ga yozadi (belgi -> sabab -> tuzatish -> natija + "
                  "saboq). Har o'zgartirishli ish oxirida chaqir.", knowledge.HISTORY_SCHEMA, knowledge.log_history,
                  knowledge.classify, _summary_cmd("sarlavha"), counts_as_work=False),
@@ -72,7 +78,9 @@ def build_specs() -> list[ToolSpec]:
         ToolSpec("ask_owner", "Jamshidga BITTA savol berib javobini kutadi. Faqat usiz davom etib bo'lmaganda. Tasdiq "
                  "uchun ishlatma — xavfli amalni kod o'zi tasdiqqa yuboradi.", owner.ASK_SCHEMA, owner.ask_owner,
                  owner.classify, _summary_cmd("question"), counts_as_work=False),
-        ToolSpec("notify_owner", "Jamshidga oraliq xabar yoki fayl (hisobot, jadval) yuboradi. Uzun ishlarda progress uchun.",
+        ToolSpec("notify_owner", "Jamshidga oraliq xabar yoki fayl (hisobot, jadval) yuboradi. Hujjat (xlsx/docx/pdf) "
+                 "yuborishdan oldin kod uni o'zi tekshiradi: tekshiruvdan o'tmagan fayl yuborilmaydi (xato matni "
+                 "qaytadi — tuzatib qayta yubor). Excel natijalari faylga kesh qiymat qilib yoziladi (formula saqlanadi).",
                  owner.NOTIFY_SCHEMA, owner.notify_owner, owner.classify, _summary_cmd("text"), counts_as_work=False),
         ToolSpec("send_business_message", "Jamshidning Telegram Business hisobidagi suhbatga (masalan onasi) uning nomidan "
                  "xabar yuboradi. chat bo'sh bo'lsa ma'lum suhbatlar ro'yxatini qaytaradi. Yuborishdan oldin Jamshid "
@@ -83,6 +91,30 @@ def build_specs() -> list[ToolSpec]:
                  "yasaydi, sifatini tekshiradi va egasiga Telegram'da tasdiq tugmalari bilan yuboradi. Joylamaydi — "
                  "joylash faqat egasi tasdiqlagan versiya bilan (2-bosqich).", reels.RENDER_SCHEMA, reels.reel_render,
                  reels.classify, lambda a: str((a.get("script") or {}).get("title", ""))[:200]),
+        ToolSpec("trading_research_source", trading.SOURCE_DESCRIPTION, trading.SOURCE_SCHEMA, trading.research_source,
+                 trading.classify_internal, lambda a: str(a.get("url", ""))[:300], counts_as_work=False),
+        ToolSpec("trading_report", trading.REPORT_DESCRIPTION, trading.REPORT_SCHEMA, trading.report,
+                 trading.classify_read, lambda a: "", counts_as_work=False),
+        ToolSpec("trading_track_manual", trading.MANUAL_DESCRIPTION, trading.MANUAL_SCHEMA, trading.track_manual,
+                 trading.classify_internal, lambda a: f"{a.get('symbol')} {a.get('direction')} {a.get('entry')}"[:300]),
+        ToolSpec("trading_mt5_status", trading.MT5_DESCRIPTION, trading.MT5_SCHEMA, trading.mt5_status,
+                 trading.classify_read, lambda a: f"{a.get('symbol', 'EUR/USD')} {a.get('timeframe', '1h')}"[:300],
+                 counts_as_work=False),
+        ToolSpec("trading_mt5_order", trading.MT5_ORDER_DESCRIPTION, trading.MT5_ORDER_SCHEMA, trading.mt5_order,
+                 trading.classify_mt5_order,
+                 lambda a: f"{a.get('action')} {a.get('symbol', '')} {a.get('side', '')} {a.get('lot', '')}"[:300],
+                 counts_as_work=False),
+        ToolSpec("trading_experiment", trading.EXPERIMENT_DESCRIPTION, trading.EXPERIMENT_SCHEMA, trading.experiment,
+                 trading.classify_internal, lambda a: f"{a.get('strategy_id')} {a.get('params')}"[:300]),
+        ToolSpec("tradingview_environment", tradingview.ENV_DESCRIPTION, tradingview.ENV_SCHEMA,
+                 tradingview.environment_tool, tradingview.classify_read, lambda a: str(a.get("device", "")),
+                 counts_as_work=False),
+        ToolSpec("tradingview_prepare", tradingview.PREPARE_DESCRIPTION, tradingview.PREPARE_SCHEMA, tradingview.prepare,
+                 tradingview.classify_internal,
+                 lambda a: f"{a.get('analysis_id') or a.get('id')} {a.get('device', '')}"[:300]),
+        ToolSpec("tradingview_verify", tradingview.VERIFY_DESCRIPTION, tradingview.VERIFY_SCHEMA, tradingview.verify,
+                 tradingview.classify_read, lambda a: f"{a.get('scenario_id')} {a.get('device', '')}"[:300],
+                 counts_as_work=False),
         ToolSpec("reel_list", "Instagram Reels ro'yxati va holati (mavzular takrorlanmasligi, rad etilganlar sababi).",
                  reels.LIST_SCHEMA, reels.reel_list, reels.classify, lambda a: str(a.get("state") or ""),
                  counts_as_work=False),
@@ -173,6 +205,11 @@ class ToolExecutor:
         except Exception as exc:  # noqa: BLE001 — har qanday xato modelga matn bo'lib qaytadi
             result = ToolResult(False, f"{type(exc).__name__}: {exc}")
         dur = int((time.monotonic() - t0) * 1000)
+        if ctx.tracker is not None:
+            try:
+                ctx.tracker.scan()  # qaysi hujjat yaratildi/o'zgardi — tool turidan qat'i nazar (skript, PowerShell...)
+            except OSError:
+                pass
 
         text = ctx.redactor.redact(result.output or "")
         if _INJECTION.search(text):

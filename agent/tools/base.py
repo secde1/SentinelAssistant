@@ -50,6 +50,14 @@ class ToolContext:
     approvals: list[dict] = field(default_factory=list)
     steps: int = 0
     last_step: str = ""
+    # Artefaktlar (V15): qaysi fayl yaratildi/o'zgardi, tekshirildi, yuborildi; faol ish konteksti.
+    tracker: Any = None  # artifacts.tracker.Tracker
+    artifact_store: Any = None  # artifacts.store.ActiveTaskStore
+    resolution: Any = None  # artifacts.intent.Resolution — xabar follow-up'mi, qaysi faylga tegishli
+    artifact_checks: dict = field(default_factory=dict)  # yo'l -> {sha, ok, verified, summary, forced}
+    delivered: dict = field(default_factory=dict)  # yo'l -> yuborilgan versiya sha256
+    validation_requirements: dict = field(default_factory=dict)
+    chart: dict = field(default_factory=dict)  # V17 TradingView: {"state": confirmed|unverified|needs_setup|invalid}
     _out_counter: int = 0
 
     @property

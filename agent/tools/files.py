@@ -45,18 +45,35 @@ def _read_document(path: Path) -> str:
         return "\n".join(parts)
     if suffix in (".xlsx", ".xlsm"):
         import openpyxl
+        from openpyxl.utils import get_column_letter
 
+        from ..artifacts import xlsx as axl
+
+        computed: dict = {}
+        try:
+            if axl.missing_cache(path):  # openpyxl yozgan formulaning natijasi faylda yo'q — o'zimiz hisoblaymiz
+                computed = axl.compute(path).values
+        except Exception:  # noqa: BLE001 — o'qish baribir davom etadi
+            computed = {}
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
         try:
             out = []
+            if computed:
+                out.append(f"(ƒ: {len(computed)} ta formula natijasi faylda saqlanmagan edi — kod hisoblab ko'rsatdi. "
+                           "Telegram/telefonda bunday katak BO'SH ko'rinadi; verify_artifact yoki notify_owner uni "
+                           "formulani saqlagan holda tuzatadi.)")
             for ws in wb.worksheets:
                 out.append(f"=== varaq: {ws.title} ===")
-                for n, row in enumerate(ws.iter_rows(values_only=True)):
-                    if n >= _MAX_SHEET_ROWS:
+                for n, row in enumerate(ws.iter_rows(min_row=1, values_only=True), start=1):
+                    if n > _MAX_SHEET_ROWS:
                         out.append(f"(... {_MAX_SHEET_ROWS} qatordan keyingisi o'qilmadi)")
                         break
+                    if computed:
+                        row = tuple(computed.get(f"{ws.title}!{get_column_letter(ci)}{n}", v) if v is None else v
+                                    for ci, v in enumerate(row, start=1))
                     if any(v is not None for v in row):
-                        out.append("\t".join("" if v is None else str(v) for v in row))
+                        out.append("\t".join("" if v is None else (str(int(v)) if isinstance(v, float) and v.is_integer()
+                                                                     else str(v)) for v in row))
             return "\n".join(out)
         finally:
             wb.close()
@@ -98,7 +115,11 @@ async def read_file(ctx: ToolContext, args: dict) -> ToolResult:
 
 # ---------------------------------------------------------------- write_file
 def classify_write(ctx: ToolContext, args: dict) -> gate.Decision:
-    return gate.classify_file_write(ctx.resolve_path(args["path"]), ctx.paths.home, ctx.secret_paths, ctx.code_root)
+    d = gate.classify_file_write(ctx.resolve_path(args["path"]), ctx.paths.home, ctx.secret_paths, ctx.code_root)
+    risk = gate.trading_risk(str(args.get("content") or ""))
+    if risk and risk[2] == "real_trade":  # buyurtma kodi yozish — faqat tasdiq bilan
+        d.escalate(*risk)
+    return d
 
 
 def backup_local_file(ctx: ToolContext, path: Path, host: str = "localhost") -> Path:
