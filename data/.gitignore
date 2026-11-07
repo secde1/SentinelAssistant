@@ -1,4 +1,6 @@
 .env
+trading_memory/database/
+trading_memory/logs/
 maxfiy/
 zaxira/
 jurnal/
@@ -8,3 +10,6 @@ __pycache__/
 *.pyc
 venv/
 .venv/
+trading_memory/
+trading/
+skript/*.bak

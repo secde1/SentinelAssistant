@@ -11,3 +11,6 @@
 
 ## Telegram Client API
 - [2026-10-30] [2026-10-30] Telethon 1.45 o'rnatilgan, Jamshid akkaunti ulangan. Skript: skript/tg_akkaunt.py (send/login/me/dialogs/sendmsg), sessiya ish/tg_session. Maxfiy qiymatlar inventar yozuvlari telegram-akkaunt (api_id/api_hash maydonlari almashgan: skript regex bilan ajratadi), telefon shu yozuvda. Ishlatish: env TG_API_ID/TG_API_HASH/TG_PHONE ni {{inv:telegram-akkaunt.*}} placeholder bilan bering, UTF-8 uchun PYTHONIOENCODING=utf-8. Boshqa odamga xabar yuborishdan oldin Jamshid tasdig'i kerak.
+
+## Telegram guruh
+- [2026-11-07] [2026-11-07] Signal guruhi 'sentinel treading alert' chat_id = -5588340884 (Jamshid tasdiqladi). Skaner (auto_scan_alert.py) shu guruhga bot @sentinel_v4bot nomidan yuboradi. Guruhda javob berish uchun agent yadrosida (guruh chat_id + user_id juftligi ruxsati) o'zgarish kerak; yadro agentga yopiq.
