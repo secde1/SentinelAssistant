@@ -9,9 +9,31 @@ egasining tasdig'iga yuboradi. Takrorlanadigan ishni skillga aylantiradi, shunin
 > **Hozirgi o'rnatish (shu kompyuter):**
 >
 > - loyiha `D:\it-agent`, ma'lumotlar `D:\it-agent\data` (`AGENT_HOME`);
-> - agent `t.admin` hisobida oddiy jarayon sifatida ishlaydi. Uni **`AgentRestart`** rejalashtirilgan vazifasi
->   ishga tushiradi (1-bo'lim);
+> - agent `t.admin` hisobida oynasiz jarayon sifatida ishlaydi. **`AgentRestart`** rejalashtirilgan vazifasi uni
+>   Windows'ga kirganda o'zi ishga tushiradi va kutilmaganda yiqilsa qayta ko'taradi. Boshqarish: `agentctl.cmd`
+>   (1-bo'lim);
 > - NSSM xizmati o'rnatilmagan. Yangi serverga o'rnatish 2-bo'limda.
+
+---
+
+## Imkoniyatlar
+
+| Soha | Nima qila oladi |
+|---|---|
+| **IT-administratorlik** | Windows/AD, Mikrotik, UniFi, Zabbix, NVR, ESXi/Hyper-V, printerlarni tekshirish va sozlash. Har xavfli amal oldin egasidan tasdiq so'raydi (gate: READ, INTERNAL, CHANGE, DANGER, BLOCK). Natija kod tekshirgan holat bilan qaytariladi |
+| **Shaxsiy yordamchi** | Word/Excel/PDF o'qish va yaratish (formulali Excel, kesh qiymat, tekshiruv), fayl saralash, internetdan qidirish, xat tayyorlash, ovozli xabarni tushunish (lokal STT) |
+| **Xotira va o'rganish** | `skill`lar (takrorlanadigan ish), `xotira/` (fakt, tarix, inventar), shaxsiyat darajalari, haftalik xulosa |
+| **Reels studiyasi** | Instagram Reels uchun video (ssenariy, ovoz, kadr, QC), egasi tasdig'i bilan |
+| **Veb-dashboard** | SENTINAL CONTROL CENTER (`127.0.0.1:8790`, faqat o'qish): qurilmalar, faoliyat, trading |
+| **Trading tadqiqoti** (V16) | Bozorni tahlil qilish, qog'oz savdo (paper), natija kuzatuvi, backtest, hisobotlar. Real pulga tegmaydi |
+| **MetaTrader 5** (V19-V25) | Faqat o'qish ma'lumoti, DEMO hisobda tasdiq bilan sinov savdosi, pozitsiya monitoringi va savdo tahlili |
+| **Signal tizimi** (V22) | 10 mezonli ball, Telegram signal + `callback_data` tugmalari, faqat PAPER pozitsiya |
+| **Strategiya laboratoriyasi** (V21, V23) | 5 yillik tarixiy sinov, in-sample/out-of-sample, walk-forward, ko'p sinov tuzatmasi, korrelyatsiya |
+| **TradingView** (V17) | Pine kodni tayyorlash va grafikka qo'yilganini OCR bilan tekshirish |
+
+**Qat'iy kafolatlar (kodda):** real pulli buyurtma avtomatik ochilmaydi; AUTO rejim yo'q; narx va indikator o'ylab
+topilmaydi; bitta savdo natijasi asosida strategiya o'zgarmaydi; faol strategiyani faqat egasi almashtiradi;
+maxfiy ma'lumot (`.env`, `maxfiy/`) jurnal, Telegram va GitHub'ga chiqmaydi.
 
 ---
 
@@ -68,36 +90,75 @@ Bulardan keyin xotira (`data\xotira\`) va mos skillar qo'shiladi (8-bo'lim).
 
 ---
 
-## 1. Hozirgi o'rnatish: ishga tushirish, to'xtatish, loglar
+## 1. Hozirgi o'rnatish: avtomatik ishga tushish, boshqarish, loglar
 
-Agent `D:\it-agent\.venv\Scripts\python.exe -m agent` jarayoni sifatida ishlaydi (ishchi papka `D:\it-agent`).
+Agent `D:\it-agent\.venv\Scripts\pythonw.exe -m agent` jarayoni sifatida **oynasiz** ishlaydi (ishchi papka
+`D:\it-agent`). VS Code yoki terminal ochiq turishi shart emas. Uni `t.admin` hisobidagi **`AgentRestart`**
+rejalashtirilgan vazifasi ishga tushiradi:
 
-**Qayta ishga tushirish** (`.env`, kod yoki prompt o'zgargandan keyin):
+| Nima bo'ldi | Agent nima qiladi |
+|---|---|
+| Windows'ga kirdingiz | 15 soniyadan keyin o'zi ishga tushadi. Internet hali bo'lmasa, Telegram'ni o'sib boruvchi pauza bilan (10 s → 5 daqiqa) kutadi, o'zini qayta ishga tushirmaydi |
+| Kutilmaganda yiqildi (xato, jarayon o'ldi) | 1 daqiqadan keyin vazifa uni qayta ko'taradi va Telegram'da "⚠️ Oldingi ish kutilmaganda to'xtagan" deb aytadi. 15 daqiqada 5 martadan ko'p ishga tushsa, o'zi to'xtaydi va "⛔" xabar yuboradi — cheksiz sikl bo'lmaydi |
+| `agentctl stop` | to'xtaydi va **o'zi qayta ishga tushmaydi** (Windows'ga qayta kirganda ham), `agentctl start` qilmaguningizcha |
+| Windows'dan chiqish (Выход) yoki o'chirish | agent ham to'xtaydi, keyingi kirishda o'zi ishga tushadi |
+| Ekran qulfi (Win+L), uyqu | ishlashda davom etadi (uyquda kutib turadi) |
+| Ikkinchi nusxa (masalan, terminalda `python -m agent`) | 15 soniya kutib, chiqib ketadi: bitta `AGENT_HOME` uchun bitta agent (`data\ish\agent.lock`) |
 
-```powershell
-schtasks /run /tn AgentRestart
+### Boshqarish — `agentctl`
+
+Administrator kerak emas. `cmd` yoki PowerShell'da:
+
+```
+D:\it-agent\agentctl.cmd status            holat: vazifa, jarayon, oxirgi ishga tushish/to'xtash
+D:\it-agent\agentctl.cmd start             ishga tushirish
+D:\it-agent\agentctl.cmd stop              to'xtatish (o'zi qayta yoqilmaydi)
+D:\it-agent\agentctl.cmd restart           qayta ishga tushirish (.env, kod yoki prompt o'zgargandan keyin)
+D:\it-agent\agentctl.cmd autostart off     Windows'ga kirganda ishga tushishni o'chirish (on — yoqish)
+D:\it-agent\agentctl.cmd logs              console.log oxiri va ishga tushish/to'xtash yozuvlari
+D:\it-agent\agentctl.cmd install           AgentRestart vazifasini yaratish/yangilash (yangi kompyuterda yoki buzilsa)
 ```
 
-Vazifa `t.admin` hisobida `data\skript\restart_agent.bat` ni bajaradi:
-
-1. 25 soniya kutadi. Agent o'zi qayta ishga tushirganda javobini yuborib ulgurishi uchun shunday qilingan.
-2. Barcha `-m agent` jarayonlarini to'xtatadi.
-3. Yangisini kichraytirilgan oynada ochadi.
-4. Konsol chiqishini `data\jurnal\console.log` ga, ishga tushirish vaqtini `data\jurnal\restart.log` ga yozadi.
-
-> **Ishlayotgan topshiriq to'xtab qoladi.** Qayta ishga tushirishdan oldin `/status` bilan faol topshiriq yo'qligini
+> **Ishlayotgan topshiriq to'xtab qoladi.** `restart`/`stop` dan oldin `/status` bilan faol topshiriq yo'qligini
 > tekshiring.
 >
-> **Kompyuter qayta yoqilganda agent o'zi ko'tarilmaydi.** `AgentRestart` da faqat vaqt triggeri bor. Kompyuter
-> o'chib-yonsa, yuqoridagi buyruqni bajaring. Doimiy yechim — vazifaga "kirishda" (logon) triggerini qo'shish yoki
-> 2-bo'limdagi NSSM xizmati.
+> Agent o'zini qayta ishga tushirishi kerak bo'lsa — `data\skript\restart_agent.bat`: 25 soniya kutib
+> `agentctl restart` qiladi, shu vaqtda agent javobini yuborib ulguradi. `schtasks /run /tn AgentRestart` ham
+> ishlaydi, lekin ishlayotgan nusxani darhol almashtiradi.
 
-**Holatni tekshirish:**
+### Vazifa sozlamalari (`agentctl install` yaratadi)
+
+| Sozlama | Qiymat | Nega |
+|---|---|---|
+| Triggerlar | Windows'ga kirganda (15 s kechikish); shu vazifa nol bo'lmagan kod bilan tugagani haqidagi hodisa (1 daqiqa kechikish) | avtostart va yiqilgandan keyin qayta ko'tarish |
+| Amal | `pythonw.exe -m agent`, ishchi papka `D:\it-agent` | konsol oynasi yo'q. Agent ochadigan `claude.exe`, PowerShell va ffmpeg ham oynasiz (`CREATE_NO_WINDOW`) |
+| Hisob | `t.admin`, faqat interaktiv, **oddiy huquq** ("highest privileges" emas), parol saqlanmaydi | eng kam huquq; Claude login shu hisobda |
+| Bir vaqtda | `StopExisting` | vazifani qayta ishga tushirish eski nusxani almashtiradi |
+| Batareya | batareyada ham ishlaydi | noutbuk |
+| Vaqt chegarasi | yo'q | doimiy jarayon |
+
+Task Scheduler'ning o'z "If the task fails, restart" sozlamasi yetmaydi: u faqat vazifa umuman ishga tushmaganda
+ishlaydi, jarayon xato kodi bilan chiqqanda emas (2026-11-03 da sinab ko'rildi). Shuning uchun Task Scheduler
+tarixidagi 201-hodisaga trigger qo'yilgan. Istisnolar: chiqish kodi 2 (sozlama xatosi — qayta urinish foyda
+bermaydi), egasi to'xtatgani yoki qayta ishga tushirgani, Windows'dan chiqish. Bu ishlashi uchun **Task Scheduler
+tarixi** (`Microsoft-Windows-TaskScheduler/Operational`) yoqilgan bo'lishi kerak. Shu kompyuterda u yoqilgan,
+`agentctl install` o'chiq bo'lsa ogohlantiradi.
+
+Chiqish kodlari: `0` — normal, ikkinchi nusxa yoki egasi to'xtatgan; `1` — kutilmagan xato (qayta ko'tariladi);
+`2` — sozlama xatosi (`.env`, Telegram tokeni).
+
+**Qayta yuklash sinovi (qo'lda):**
+
+1. `agentctl status` — "Avtostart: yoqilgan (Windows'ga kirganda)".
+2. Kompyuterni qayta yuklang va `t.admin` bilan kiring.
+3. Taxminan 1 daqiqada Telegram'ga "✅ IT-agent ishga tushdi" keladi.
+4. `agentctl status` — "Jarayon: ishlayapti ... vazifa orqali", oxirgi yozuvlarda "oldingi ish: Windows qayta
+   yuklangan yoki o'chirilgan".
+
+### Holatni tekshirish
 
 ```powershell
-# jarayon bormi va qancha xotira egallagan
-Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? CommandLine -match '-m agent' |
-  select ProcessId, CreationDate, @{n='MB';e={[int]($_.PrivatePageCount/1MB)}}
+D:\it-agent\agentctl.cmd status
 
 # sozlamalar, PowerShell, Telegram, Claude, Zabbix, Reels studiyasi
 D:\it-agent\.venv\Scripts\python.exe -m agent --check
@@ -106,16 +167,18 @@ D:\it-agent\.venv\Scripts\python.exe -m agent --check
 D:\it-agent\.venv\Scripts\python.exe -m agent --once "C: diskda qancha joy qoldi?"
 ```
 
-`--check` ni agent ishlab turganda ham bemalol ishga tushirsa bo'ladi. `--once` esa alohida Claude sessiyasini
-ochadi va obuna limitidan sarflaydi.
+`--check` va `--once` ni agent ishlab turganda ham ishga tushirsa bo'ladi (bitta nusxa qulfi ularga tegishli emas).
+`--once` esa alohida Claude sessiyasini ochadi va obuna limitidan sarflaydi.
 
 | Nima | Qayerda (`D:\it-agent\data\...`) |
 |---|---|
 | Har amal (o'qishga qulay) | `jurnal\YYYY-MM-DD.md` — vaqt \| host \| nima qildim \| natija |
 | Har amal (struktura) | `jurnal\YYYY-MM-DD.jsonl` — vaqt, host, tool, parametr, natija, success, `holat` |
+| Ishga tushish, to'xtash, yiqilish | `.jsonl` dagi `agent_start` (PID, versiya, oldingi ish qanday tugagani), `agent_stop`, `agent_crash` (xato izi), `agent_crash_loop`, `agent_duplicate`, `agent_refused`, `agent_*_requested` (agentctl); `.md` da "Agent ..." qatorlari. Qisqasi: `agentctl logs` |
 | Dastur logi | `jurnal\agent.log` (aylanma, 5×5 MB) |
-| Konsol (kutilmagan xato traceback'i, chiqish kodi) | `jurnal\console.log` |
-| Qayta ishga tushirishlar | `jurnal\restart.log` |
+| Konsol (kutilmagan xato izi, faulthandler) | `jurnal\console.log` |
+| Jarayon holati | `ish\agent.state` (PID, versiya, boshlangan vaqt, har daqiqadagi "tirik" belgisi), `ish\agent.stop`, `ish\agent.starts` |
+| Eski qayta ishga tushirishlar (2026-11-03 gacha) | `jurnal\restart.log` |
 | O'zgartirishdan oldingi zaxiralar | `zaxira\YYYY-MM-DD\` (+ `index.jsonl`) |
 | Topshiriq ishchi fayllari, uzun hisobotlar | `ish\<topshiriq-ID>\` |
 | Reels videolari va holat bazasi | `ish\reels\` (`reels.db`, `<ID>\<ID>_v<N>.mp4`) |
@@ -247,6 +310,7 @@ ishga tushiring.
 | Ovozli xabar | `STT_ENABLED=1`, `STT_MODEL=univoice-stt-uz-ct2` (papka `data\modellar\` ichida), `STT_LANGUAGE` (bo'sh — `uz`) |
 | Proaktiv | `ZABBIX_ENTRY=zabbix`, `ZABBIX_POLL_SEC=120`, `ZABBIX_MIN_SEVERITY=3`, `ALERT_TASKS_PER_HOUR=3`, `DAILY_CHECK_AT` (bo'sh — o'chiq) |
 | Reels studiyasi | `REELS_ENABLED=0`, `REELS_PER_DAY=2`, `REELS_PREPARE_AT` (bo'sh — faqat qo'lda), `REELS_TTS=auto` (`auto`/`azure`/`edge`), `REELS_VOICE=uz-UZ-MadinaNeural` (yoki `uz-UZ-SardorNeural`), `REELS_RATE=+0%`, `AZURE_SPEECH_KEY`, `AZURE_SPEECH_REGION`, `REELS_FONT`, `REELS_BRAND` |
+| Trading | `TRADING_ENABLED=0`, `TRADING_GROUP_CHAT_ID`, `TWELVEDATA_API_KEY`, `MT5_PATH` (terminal64.exe), `MT5_ALLOW_REAL=0`, `MT5_MAX_LOT=0.10`, `MT5_MAX_POSITIONS=3` |
 | Ustki panel | `CONTROL_ENABLED=1`, `CONTROL_PORT=8787` (0 — o'chiq), `CONTROL_TOKEN` (bo'sh — har ishga tushganda yangisi yaratiladi) |
 
 Hozirgi `.env` da: `REELS_ENABLED=1`, `REELS_PER_DAY=2`, `REELS_PREPARE_AT` bo'sh. Demak videolar hozircha faqat
@@ -272,6 +336,9 @@ Hozirgi `.env` da: `REELS_ENABLED=1`, `REELS_PER_DAY=2`, `REELS_PREPARE_AT` bo's
 | `/reels` | Reels holati: bugun nechta tayyor, qaysilari tasdiq kutmoqda, oxirgi videolar |
 | `/reels_tayyorla [soni]` | hozir 1–5 ta video tayyorlash |
 | `/reels_pauza`, `/reels_davom` | kunlik avtomatik tayyorlashni to'xtatish / davom ettirish |
+| `/trading_signal off\|dry\|live` | signal tizimi rejimi: o'chiq / faqat skanerlaydi (guruhga yubormaydi) / guruhga yuboradi |
+| `/trading_signal_test [SYMBOL]` | tugmalarni sinash: haqiqiy setup TEST belgisi bilan (statistikaga kirmaydi) |
+| `/trading_signallar` | signal va paper statistikasi |
 
 Tasdiq so'roviga **"ha"** / **"yo'q"** deb yoki tugma bilan javob bering. Bir nechta so'rov bo'lsa — kerakli
 xabarga reply qiling. Noaniq javob yoki 15 daqiqa jim turish **"yo'q"** deb hisoblanadi. "Ha" faqat o'sha bitta
@@ -306,6 +373,78 @@ Xavfsizligi:
 - chiqadigan matn redaction'dan o'tadi.
 
 API: `GET /api/state`, `POST /api/task`, `POST /api/answer`, `POST /api/stop`.
+
+---
+
+## 5a. Veb-dashboard — SENTINAL CONTROL CENTER (V12.1)
+
+`dashboard.cmd` ni oching. Server `127.0.0.1:8790` da ishga tushadi va brauzer token bilan o'zi kiradi. Oynani
+yopsangiz, dashboard to'xtaydi. Agentdan **alohida jarayon**: agent kodi o'zgarmagan, agent to'xtab qolsa ham
+dashboard ishlaydi.
+
+Dashboard faqat o'qiydi: buyruq bajarmaydi, boshqa kompyuterlarga ulanmaydi, tarmoqni skanerlamaydi.
+
+| Sahifa | Nima ko'rsatadi | Manba |
+|---|---|---|
+| Dashboard | qurilmalar soni va holati, shu kompyuterning yuklamasi, bugungi topshiriqlar, agent holati | hammasi |
+| Organizations / Departments | TASHKILOT → OBYEKT → BO'LIM → QURILMA | AD eksportidagi DN, `xotira\tuzilma.json` |
+| Devices / Device Details | ID, nom, Windows versiyasi, CPU, RAM, disk, holat, bo'lim, oxirgi inventar vaqti; qurilmadagi agent ishlari | AD CSV, `maxfiy\inventar.json` (faqat type/host/description), shu kompyuter |
+| Monitoring | CPU, RAM, disk (joy va faollik), Windows versiyasi, o'rnatilgan dasturlar — **faqat shu kompyuter** | psutil + Windows registry |
+| Activity History | topshiriqlar, amallar, tizim hodisalari: vaqt, qurilma, topshiriq, natija, xato | `jurnal\*.jsonl`, `ish\suhbat.jsonl` |
+| AI Chat | SENTINAL bilan suhbat, **tool'larsiz** | Claude obunasi (Telegram agentidagi bilan bir xil) |
+| Reports | kunlar bo'yicha topshiriqlar, qurilma/tool reytingi, inventar kesimlari; CSV/JSON eksport, chop etish | jurnal + inventar |
+| Settings | sozlamalar (faqat ko'rish), manbalar holati, maxfiy qiymat "bor/yo'q" belgisi | `.env` |
+
+Ma'lumot o'ylab topilmaydi: manbada yo'q maydon **Unknown** bo'lib ko'rinadi. Masalan, CPU/RAM/disk faqat shu
+kompyuter uchun ma'lum, chunki boshqa kompyuterlarga ulanilmaydi.
+
+**Tuzilma qayerdan olinadi.** AD eksportida `DN` (DistinguishedName) ustuni bo'lsa: domen → tashkilot, birinchi OU →
+obyekt, ikkinchi OU → bo'lim (`Компьютеры` kabi umumiy konteynerlar tashlab yuboriladi). Hozir `StaleComps.csv` da DN
+bor, `ActiveComps.csv` da yo'q, shuning uchun faol kompyuterlar "Unknown" ostida. Tuzatish uchun ikki yo'l bor:
+
+- agentdan faol kompyuterlarni `DistinguishedName` ustuni bilan qayta eksport qilishni so'rang (`ish\ActiveComps.csv`);
+- yoki `data\xotira\tuzilma.json` faylida qo'lda biriktiring:
+
+```json
+{ "devices": { "XS-NB-AUP06": { "organization": "Xon Saroy", "object": "Bosh ofis", "department": "АУП" } } }
+```
+
+**Holat.** `Online` — shu kompyuter (jonli). `Active (AD)` / `Inactive (AD)` — AD dagi oxirgi kirish
+`DASHBOARD_STALE_DAYS` (30) kundan yangi yoki eski. `Disabled (AD)` — hisob o'chirilgan. `Unknown` — faqat agent
+inventaridan ma'lum qurilma (ping qilinmaydi).
+
+**AI chat.** Claude Code CLI `tools=[]`, MCP serversiz, `permission_mode=dontAsk` va hamma tool'ni rad etuvchi hook
+bilan chaqiriladi. Model faqat matn bilan javob beradi. Kontekst: dashboard holatining qisqa nusxasi va agent xotirasi
+(`xotira\*.md`), hammasi redaction'dan o'tgan. O'zgartirish so'ralsa, model Telegram agentiga yo'naltiradi va
+topshiriq matnini tayyorlab beradi. Suhbat tarixi: `data\ish\dashboard\web_chat.jsonl`.
+
+Xavfsizligi:
+
+- server faqat `127.0.0.1` ga bog'lanadi; `Host` sarlavhasi `127.0.0.1`/`localhost` bo'lmasa, so'rov rad etiladi
+  (DNS rebinding'dan himoya);
+- API faqat sessiya cookie bilan ishlaydi (`HttpOnly`, `SameSite=Strict`, 12 soat). Sessiya token bilan ochiladi:
+  token `data\ish\dashboard.json` da (GitHub'ga tushmaydi) yoki `.env` dagi `DASHBOARD_TOKEN`. Token URL'ning `#`
+  qismida keladi, serverga va brauzer tarixiga yozilmaydi;
+- POST so'rovlarda `X-Requested-With: sentinal` sarlavhasi majburiy va begona `Origin` rad etiladi (CSRF);
+- har javob redaction'dan o'tadi: parol, token, yaratilgan parollar va inventardagi login nomlari yashiriladi.
+  Inventardan faqat `type`, `host`, `description` olinadi;
+- CSP, `X-Frame-Options: DENY`, `nosniff`, `no-referrer` sarlavhalari qo'yiladi; statik fayllar papkadan tashqariga
+  chiqmaydi;
+- Telegram agentiga faqat o'qish so'rovi yuboriladi (`GET /api/state`): topshiriq, tasdiq yoki stop yuborilmaydi.
+
+Frontend (Next.js + TypeScript + Tailwind) `web\` papkasida. Statik eksport sifatida build qilinadi (`web\out`) va
+uni Python server tarqatadi. Node.js faqat build uchun kerak:
+
+```powershell
+cd D:\it-agent\web
+npm ci
+npm run build
+```
+
+Sozlamalar: `.env` dagi `DASHBOARD_*` qiymatlari (`.env.example` ga qarang). API: `GET /api/overview`, `/api/devices`,
+`/api/devices/<id>`, `/api/hierarchy`, `/api/monitoring/{current,history,system,software}`, `/api/activity`,
+`/api/reports`, `/api/agent`, `/api/settings`, `/api/chat/status`; `POST /api/chat`, `/api/monitoring/refresh`
+(shu kompyuter inventarini qayta yig'ish). Log: `data\jurnal\dashboard.log`.
 
 ---
 
@@ -381,14 +520,49 @@ koddaniki** (`agent/verification.py`). Kod ish davomida to'plangan faktlarga qar
 | Holat | Qachon |
 |---|---|
 | ✅ `SUCCESS` | ish bajarildi. O'zgartirish bo'lgan bo'lsa, `verify` uni tasdiqlagan |
-| ⚠️ `PARTIAL` | qisman bajarildi; yoki o'zgartirish bo'ldi-yu tekshirilmadi; yoki qadam/limit chegarasida to'xtadi |
+| ⚠️ `PARTIAL` | qisman bajarildi; o'zgartirish bo'ldi-yu tekshirilmadi; yaratilgan/o'zgargan hujjat tekshirilmadi; follow-up so'ragan o'zgarish faylga kiritilmadi; yoki qadam/limit chegarasida to'xtadi |
 | 🔧 `NEEDS_SETUP` | davom etish uchun sozlama yoki dastur kerak (masalan, Instagram professional akkaunt) |
 | 🔐 `NEEDS_AUTH` | login, ruxsat yoki token kerak |
-| ❌ `FAILED` | xato bilan tugadi yoki `verify` muvaffaqiyatsiz chiqdi |
+| ❌ `FAILED` | xato bilan tugadi, `verify` muvaffaqiyatsiz chiqdi yoki hujjat tekshiruvdan (`verify_artifact`) o'tmadi |
 | ⛔ `BLOCKED` | gate yoki model rad etdi |
 
 Model "SUCCESS" desa-yu, kod tekshiruvi buni tasdiqlamasa, kod qatorni almashtiradi va oxiriga "(kod tekshiruvi)"
 deb qo'shadi. Matndagi "tasdiqlandi" so'zi ham tuzatiladi. Oddiy suhbatda `Holat:` qatori bo'lmaydi.
+
+---
+
+## 7a. Fayl bilan ishlash sifati — faol ish, Excel, tekshiruv (V15)
+
+06.11 dagi smeta voqeasi asosida qilingan. O'shanda agent formulali Excel yasagan, lekin openpyxl formula natijasini
+saqlamagani uchun Telegram va telefonda ИТОГО bo'sh ko'ringan. "Итого суммасини чиқазиб бер" deyilganda agent faylga
+emas, chatga javob bergan. Keyin formulalarni qo'lda yozilgan raqamga almashtirib, SUCCESS degan. Endi bularni kod
+nazorat qiladi (`agent/artifacts/`):
+
+| Muammo | Kodda nima qiladi |
+|---|---|
+| Follow-up kontekstini yo'qotish | **Faol ish** (`data\ish\aktiv_ish.json`): topshiriq, asl maqsad, oxirgi ko'rsatmalar, ishchi fayl, oxirgi tasdiqlangan va yuborilgan versiya (sha256), bajarilmay qolgan o'zgarish. Har topshiriqda promptga `FAOL ISH` bo'limi qo'shiladi |
+| "Шуни ўзгартир", "ИТОГО қўш", "тайёр файлни юбор" | `intent.py` xabar oldingi ishning davomi ekanini va qaysi faylga tegishli ekanini aniqlaydi: fayl turi (смета/excel → xlsx, хат/word → docx), ishora so'zi, qisqa o'zgartirish yoki yuborish so'rovi. Biriktirilgan fayl o'zi ishchi faylga aylanadi |
+| Keraksiz savol | fayl aniq bo'lsa, "qaysi fayl?" savoliga kod o'zi javob beradi (`ask_owner` Jamshidgacha bormaydi). Bir nechta mos fayl bo'lsa — bitta savolga ruxsat |
+| Natija chatda qoldi | follow-up faylni o'zgartirishni so'ragan, fayl esa o'zgarmagan va qayta yuborilmagan bo'lsa → eslatma, keyin holat `PARTIAL` |
+| Excel'da jami bo'sh | `formula.py` formulalarni mustaqil hisoblaydi (SUM, ROUND, IF, SUMIF, boshqa varaq, nomlangan diapazon...). `xlsx.py` natijani XML ga kesh qiymat qilib yozadi, formula o'chmaydi. Excel ochganda baribir qayta hisoblaydi (`fullCalcOnLoad`) |
+| Formulani raqamga almashtirish | oldingi versiya bilan farq: formula o'chgan yoki songa almashgan bo'lsa → `FAIL` (faqat Jamshid aniq so'rasa ruxsat) |
+| Tekshirilmagan fayl | tracker qaysi xlsx/docx/pdf/pptx yaratilgani yoki o'zgarganini kuzatadi (write_file, skript, PowerShell — farqi yo'q). Joriy versiya tekshirilmagan → `PARTIAL`. Tekshiruvdan o'tmagan → `FAILED` |
+| Noto'g'ri fayl yuborildi | `notify_owner` hujjatni yuborishdan oldin o'zi tekshiradi. Xatoli fayl yuborilmaydi va xato matni modelga qaytadi. Oxirgi tasdiqlangan versiya qayta tekshirilmaydi |
+| Versiya yo'qolishi | har versiyaning nusxasi `data\ish\versiyalar\` da saqlanadi (faylga oxirgi 10 ta) |
+
+Yangi tool'lar:
+
+- `inspect_artifact` — o'zgartirishdan oldin faylni ko'rish: kataklar, formula va uning natijasi, jami qatorlari,
+  kesh holati, grafik yoki pivot borligi;
+- `verify_artifact` — tekshiruv. Fayl ochiladimi, formulalar xatosiz va mustaqil hisoblanadimi, jami ko'rinadimi,
+  `expect` qiymatlari mosmi (masalan `ИТОГО = 75 237 800`), oldingi versiyaga nisbatan nima o'zgardi;
+- `excel_total` — ko'rinadigan ИТОГО qatori: `SUM` formulasi, valyuta formati, sariq fon. Qatorlarni surmaydi.
+  Shu ustun uchun jami qatori allaqachon bo'lsa, takrorlamaydi. Grafik yoki pivot bo'lsa, faylga tegmaydi.
+
+`read_file` endi formula natijasi saqlanmagan Excel katagini bo'sh emas, hisoblangan qiymat bilan ko'rsatadi.
+
+Tekshiruvlar: avtomatik testlar (`tests/test_artifacts.py`, A–F ssenariylari) va haqiqiy Excel (Excel o'rnatilgan
+bo'lsa, test COM orqali faylni ochib, qiymatlarni solishtiradi).
 
 ---
 
@@ -433,6 +607,244 @@ Haftalik xulosa kodda hisoblanadi va 5 qatordan iborat:
 
 Telegramda `/xulosa`. Avtomatik variant — `ITAgent-Haftalik` vazifasi; u faqat `install.ps1` bilan yaratiladi, shu
 kompyuterda hozir yo'q.
+
+---
+
+## 8a. Trading Research — tahlil, qog'oz savdo, strategiya tadqiqoti (V16)
+
+Bu bo'lim **faqat tadqiqot va simulyatsiya** uchun:
+
+- real pul bilan savdo qilinmaydi;
+- tadqiqot moduli broker yoki birjaning buyurtma (order) API'siga ulanmaydi. Yagona istisno — MT5 **DEMO** hisobda
+  sinov savdosi (`trading_mt5_order`, V20): faqat DEMO, har buyurtma egasi tasdig'i bilan;
+- broker loginlari saqlanmaydi;
+- narx va indikator o'ylab topilmaydi: ma'lumot bo'lmasa, tahlil ham bo'lmaydi.
+
+Kod: `agent/trading/`. Xotira: `data\trading_memory\` (asosiy manba — `database\trading_research.db`).
+
+**Yoqish:** `.env` da `TRADING_ENABLED=1`, keyin agentni qayta ishga tushirish. O'chirish uchun `0`.
+
+**Bozor ma'lumoti:**
+
+- Binance ochiq market-data API (`data-api.binance.vision`): kalit kerak emas, faqat bozor ma'lumoti. `api.binance.com`
+  bu tarmoqda ochilmaydi;
+- ixtiyoriy: Twelve Data (`TWELVEDATA_API_KEY`) — XAU/USD, EUR/USD uchun. Kalit bo'lmasa, bu juftliklar o'tkazib
+  yuboriladi;
+- iqtisodiy kalendar: ForexFactory haftalik JSON.
+
+TradingView'ning ochiq ma'lumot API'si yo'q, shuning uchun u manba sifatida ishlatilmaydi. Tahlil faqat yopilgan
+shamlardan qilinadi, har yozuvda manba va vaqt belgisi saqlanadi.
+
+**Kunlik oqim** (`research_settings.json`, Toshkent vaqti):
+
+| Vaqt | Ish |
+|---|---|
+| 10 ta slot (09:00 … 22:00) | tahlil: rejim (ADX, EMA, ATR persentili) → mos strategiyalar → TRADE yoki NO-TRADE (sababi bilan). Ma'lumot yo'q bo'lsa — keyingi instrument; hech biri bo'lmasa — slot `failed`, tahlil yaratilmaydi |
+| har 10 daqiqa | natija kuzatuvi (pastda) |
+| 08:30 | kunlik tadqiqot: agent manbalarni `trading_research_source` bilan yozadi (URL, nashr va olingan sana, xulosa, dalil turi) |
+| 23:30 | kunlik hisobot (yakshanba — haftalik ham): bugungi va oldingi kunlar tahlillari natijasi alohida |
+
+**Strategiyalar:**
+
+- 7 ta gipoteza: TF-PULLBACK, BRK-RETEST, SR-BOUNCE, MA-CROSS, RSI-MR, VOL-BRK, MS-BOS;
+- versiya bazada o'zgarmas (trigger), o'zgarish — faqat yangi versiya bilan;
+- yangi versiya `trading_experiment` bilan yaratiladi: tarixiy ma'lumotda in-sample 70% / out-of-sample 30%, xarajat
+  bilan, eski versiya bilan solishtiriladi. Muvaffaqiyatsiz eksperiment ham saqlanadi;
+- faollashtirish faqat egasining buyrug'i bilan: `/trading_faollashtir <ID> <versiya>`;
+- kutubxonadagi tarixiy natija `strategy_stats` jadvalida.
+
+Birinchi o'lchov (BTCUSDT 1h, 2000 sham, Binance komissiyasi 0.1% bilan): **7 strategiyaning hammasida expectancy
+manfiy chiqdi**. Hech biri "ishlaydi" deb hisoblanmaydi — bu sinalayotgan gipotezalar.
+
+**Natija kuzatuvi (paper trading):**
+
+- holatlar: `PENDING → ACTIVE_SIMULATION → TP_HIT / SL_HIT / EXPIRED`; yoki `NOT_TRIGGERED`, `CANCELLED`,
+  `AMBIGUOUS_DATA`;
+- kuzatuv faqat gipotetik kirish sharti bajarilgandan keyin boshlanadi; e'londan oldingi harakat hisobga olinmaydi;
+- spread (long kirish ask narxida) va komissiya hisobga olinadi; gap bo'lsa, yomonroq narx olinadi;
+- bitta shamda TP va SL bo'lsa — 1 daqiqalik shamlar bilan aniqlanadi. Aniqlab bo'lmasa — `AMBIGUOUS_DATA`, bu hech
+  qachon yutuq deb hisoblanmaydi;
+- asl tahlil va natija hodisalari o'zgartirib bo'lmaydi (trigger + sha256);
+- har SL avtomatik tahlil qilinadi: qoidani qayta tekshirish, rejim, volatillik, xarajat, yaqin hodisalar →
+  tasnif (`Normal strategy loss`, `Invalid setup`, ...).
+
+**Statistika:**
+
+- yutuq foizi = TP / (TP + SL); hal bo'lmaganlar maxrajga kirmaydi;
+- ko'rsatkichlar: expectancy, maksimal pasayish;
+- kesimlar: strategiya, instrument, sessiya, taymfreym;
+- 30 tadan kam namunada "namuna kichik" deb ogohlantiriladi.
+
+**Telegram:** tahlil ruxsat etilgan guruhga chiqadi. Har xabarda ANALYSIS ID, instrument, taymfreym, strategiya va
+versiyasi, kontekst, kirish sharti, virtual SL/TP, R/R, bekor qilish sharti, ma'lumot vaqti va "RESEARCH ONLY / PAPER
+TRADING" belgisi bo'ladi.
+
+- Guruh faqat egasi tasdiqlagandan keyin ishlaydi. Bot guruhga qo'shilsa, egasiga chat_id bilan xabar keladi.
+  Tasdiqlash: `/trading_guruh <chat_id>`.
+- Natija yangilanishi asl xabarga reply bo'lib chiqadi, `message_id` bazada saqlanadi.
+- Dublikat yuborilmaydi: yuborish natijasi noma'lum bo'lsa, xabar qayta yuborilmaydi va egasiga aytiladi.
+
+**Qayta ishga tushish:** vazifa holati bazada saqlanadi (`jobs`).
+
+- Agent o'chiq paytdagi slotlar `missed` deb yoziladi, o'tgan vaqt uchun tahlil yaratilmaydi.
+- Hisobot o'z vaqtida chiqmagan bo'lsa, qayta ishga tushganda kechikkan hisobot sifatida chiqariladi.
+
+**Buyruqlar:** `/trading`, `/trading_tahlil [SYMBOL TF]`, `/trading_hisobot`, `/trading_guruh <chat_id>`,
+`/trading_guruh_ochir`, `/trading_faollashtir <ID> <versiya>`.
+
+**Agent tool'lari:** `trading_report` (o'qish), `trading_research_source`, `trading_experiment`, `trading_track_manual`,
+`trading_mt5_status`, `trading_mt5_order`, `tradingview_environment`, `tradingview_prepare`, `tradingview_verify`.
+
+**Dashboard:** `/trading/` — tahlillar xronologiyasi, natija kuzatuvi, grafiklar, strategiyalar, SL tahlillari,
+manbalar, eksperimentlar, hisobotlar. Baza faqat o'qish rejimida ochiladi, boshqaruv tugmalari yo'q.
+
+### TradingView grafigi (V17)
+
+TradingView Desktop'da grafikka indikator yoki chizma qo'shadigan rasmiy API yo'q. Tekshirilgan holat:
+
+- UI Automation 0 element beradi;
+- Charting Library — faqat o'z saytiga joylash uchun;
+- webhook — faqat chiquvchi alert.
+
+Shuning uchun agent grafikni **o'zi o'zgartirmaydi** (`agent/trading/tradingview.py`). Oqim:
+
+1. `tradingview_environment` — qurilmani aniqlaydi:
+   - `local` = XS-NB-AUP06: TradingView Desktop 3.5.0.8375 bor, interaktiv sessiya bor;
+   - `nb-xs-tex02` — masofaviy, WinRM'da ish stoli yo'q, shuning uchun NEEDS_SETUP;
+   - noaniq qurilma bo'lsa — egasidan so'raladi.
+2. `tradingview_prepare` — Pine v5 tayyorlaydi:
+   - darajalar o'zgarmas tahlildan olinadi (`analysis_id`, sha256 tekshiruvi bilan) yoki qo'lda kiritiladi;
+   - koddagi annotatsiyalar: kirish, virtual SL/TP, strategiya va versiya, ID, vaqt, bekor qilish sharti va
+     "SIMULATED RESEARCH - NOT ADVICE" belgisi;
+   - indikator `syminfo.ticker` va `timeframe.period` ni o'zi tekshirib, "Chart matches scenario" yoki "WRONG CHART"
+     deb yozadi.
+3. Statik tekshiruv:
+   - versiya va sintaksis (qavs, qo'shtirnoq, chekinish);
+   - funksiyalar faqat ruxsat ro'yxatidan: `strategy`, `request`, `alert`, `plot` taqiqlangan;
+   - darajalar asl ssenariyga aynan teng, dublikat yo'q, "kafolat" so'zi yo'q.
+
+   Bu kompilyatsiya emas: kompilyatsiya faqat TradingView'da tasdiqlanadi.
+4. Saqlash: `data\trading_memory\pine\` — mavjud fayl ustiga yozilmaydi, bir xil ssenariy qayta yaratilmaydi. Keyin
+   clipboard (qayta o'qib tekshiriladi) va o'rnatish qadamlari. Holat: **PARTIAL**.
+5. Egasi kodni Pine Editor'ga qo'yib, "Add to chart" bosadi.
+6. `tradingview_verify` (`window`: `auto` / `desktop` / `browser`):
+   - TradingView Desktop oynasi va brauzer (Chrome/Edge) oynasi — faol yorlig'i TradingView bo'lsa — har biri alohida
+     rasmga olinadi (PrintWindow — oyna faollashtirilmaydi va o'zgarmaydi). Boshqa ilovalar olinmaydi;
+   - brauzer rasmida TradingView sahifasi (manzil satri yoki indikator belgisi) bo'lmasa, rasm o'chiriladi. Fon
+     yorlig'i rasmga tushmaydi;
+   - rasm RapidOCR bilan o'qiladi;
+   - **SUCCESS** faqat simulyatsiya belgisi, ID, barcha darajalar va "Chart matches scenario" ko'ringanda beriladi;
+   - indikator ikki marta qo'shilgan bo'lsa — dublikat ogohlantirishi chiqadi;
+   - oyna sarlavhasiga ishonilmaydi: interfeys ruscha va taymfreym "1ч" ko'rinishida chiqadi.
+
+Holatni kod belgilaydi (`verification.py`):
+
+- grafik tasdiqlanmagan → PARTIAL;
+- integratsiya yo'q → NEEDS_SETUP;
+- Pine yaroqsiz → FAILED.
+
+Kor-korona GUI kiritish (SendKeys, mouse_event, SendInput, pyautogui, UI Automation Invoke) gate'da DANGER: faqat
+egasining tasdig'i bilan o'tadi. Agentning birinchi versiyasi `data\skript\tv_pine.py` ma'lumot uchun qoldirildi.
+
+### MetaTrader 5 bozor ma'lumoti (V19, 1-bosqich)
+
+`agent/trading/mt5_connector.py` — rasmiy `MetaTrader5` Python paketi orqali **faqat o'qish** ulanishi:
+
+- paketga faqat ruxsat ro'yxati orqali murojaat qilinadi (`initialize`, `terminal_info`, `account_info`, `symbols_*`,
+  `symbol_info*`, `copy_rates_*`). Buyurtma funksiyasi chaqirilsa — `PermissionError`;
+- `initialize()` ga login/parol berilmaydi. Hisob raqami, ism va balans saqlanmaydi: faqat hisob turi (DEMO/REAL) va
+  server nomi;
+- REAL hisobda ulanmaydi (`MT5_ALLOW_REAL=1` bo'lmasa);
+- yopiq terminal ishga tushirilmaydi. Bir nechta terminal ochiq bo'lsa, `MT5_PATH` bo'lmaguncha tanlanmaydi;
+- shamlar broker server vaqtidan UTC ga o'giriladi. Siljish faqat jonli tik oqimidan o'lchanadi, eskirgan tikdan
+  taxmin qilinmaydi;
+- broker simvol nomi avtomatik topiladi (`XAUUSD`, `XAUUSDm`, `EURUSD.a`, `GOLD`).
+
+`MT5Provider` mavjud `MarketData` ga provayder sifatida ulanadi. Jadval, nashr, natija kuzatuvi, backtest va hisobot
+o'zgarmaydi. Jadvalga jonli ulanish testi o'tgandan keyin ulanadi.
+
+Gate:
+
+- buyurtma API'lari (`order_send`, `OrderSend`, `TRADE_ACTION_*`, `CTrade`, `create_order` ...) buyruqda, ishga
+  tushiriladigan skriptda yoki `write_file` matnida bo'lsa — DANGER (egasining tasdig'i; V20 gacha BLOCK edi);
+- `MetaTrader5` ni to'g'ridan-to'g'ri import qilish yoki `terminal64.exe` ni ishga tushirish — DANGER (egasining tasdig'i).
+
+Tool: `trading_mt5_status` — ulanish testi va bitta tarixiy ma'lumot testi.
+
+---
+
+### MT5 DEMO savdo (V20)
+
+`agent/trading/mt5_trade.py` (`DemoTrader`), tool `trading_mt5_order` (`check` | `open` | `close` | `positions`).
+
+- **Faqat DEMO.** Har buyurtmadan oldin hisob turi qayta o'qiladi: REAL va CONTEST rad etiladi (`MT5_ALLOW_REAL=1`
+  bo'lsa ham). REAL bilan ishlash alohida qaror.
+- `open` va `close` har safar egasidan tasdiq so'raydi (DANGER). `check` (`order_check`, yubormaydi) va `positions`
+  tasdiqsiz.
+- Stop-loss majburiy va narxning to'g'ri tomonida; lot `MT5_MAX_LOT` dan, ochiq pozitsiyalar `MT5_MAX_POSITIONS` dan
+  oshmaydi; faqat o'zimizning magic raqamli pozitsiyalar ko'rinadi va yopiladi (qo'lda yoki EA ochganlariga tegilmaydi).
+- Avval `order_check`, keyin `order_send`; brokerning `retcode` natijasi aynan qaytariladi.
+- Jurnal: `trading_memory/mt5_demo_trades.jsonl` (hisob raqami, ism va balans yozilmaydi).
+
+### Signal tizimi (V22)
+
+`agent/trading/signal_score.py` (ball) va `signals.py` (skaner, Telegram, tugmalar, paper pozitsiya).
+
+- **Skaner:** har 15 daqiqada `settings["signals"]["universe"]` bo'yicha 1H da faol strategiyalar setupi topiladi.
+- **10 mezon** (har biri 1 ball, faqat haqiqiy hisoblangan ma'lumotdan): 4H trend, 1H trend, 15M EMA20/EMA50, RSI,
+  MACD, support/resistance, breakout, hajm, bozor strukturasi, R/R. Ma'lumot yetishmasa mezon 0 ball va signal
+  yuborilmaydi. 4H trend signalga teskari bo'lsa — ball qanday bo'lsa ham BLOCK.
+- **Darajalar:** 0-3 yuborilmaydi · 4-5 kuzatuv ro'yxati (bazada) · 6-7 faqat 4H, 1H, hajm va R/R hammasi bajarilgan
+  bo'lsa · 8-10 kuchli nomzod. Ball — bajarilgan mezonlar soni, **g'alaba ehtimoli emas**.
+- **Tugmalar:** `callback_data` `sentinel:confirm:<ID>` / `sentinel:reject:<ID>` (URL emas, `/start` yubormaydi).
+  Faqat egasi (`ALLOWED_USER_ID`) bosa oladi va faqat signal yuborilgan guruhda; boshqa a'zolar bossa hech narsa
+  o'zgarmaydi. Holat atomik o'zgaradi (qayta bosish va ikki tugma bir vaqtda — faqat birinchisi o'tadi).
+- **HA** — faqat **PAPER** pozitsiya (simulyatsiya). Tasdiq paytida muddat, bekor qilish sharti, narx (SL/TP dan o'tmaganmi,
+  kirishdan 1 ATR dan uzoq emasmi) qayta tekshiriladi. **YO'Q** — pozitsiya ochilmaydi.
+- **Dublikat:** instrument + yo'nalish uchun faol signal yoki cooldown (4 soat) ichidagi signal qayta yuborilmaydi.
+- **Rejimlar:** `off` · `dry` (skanerlaydi, yubormaydi — standart) · `live`.
+- Jadvallar: `signals`, `paper_positions`, `signal_events`.
+
+### Nomzod strategiyalar va tadqiqot laboratoriyasi (V21, V23)
+
+Faol strategiyalar (signal beradi): `TF-PULLBACK`, `MA-CROSS`, `VOL-BRK`. Arxivda (kod saqlangan, signal bermaydi):
+`BRK-RETEST`, `SR-BOUNCE`, `MS-BOS`, `RSI-MR` (5 yillik sinovda xarajatdan keyin zarar). Nomzod (`candidate`, signal
+bermaydi): `LIQ-SWEEP` (likvidlik tortishi), `TL-BOUNCE`, `TL-BREAK` (trend chizig'i), `SNR-REJ` (SNR rad etish) —
+`strategies_smc.py`. Faollashtirish — faqat egasi, sinovdan keyin.
+
+`research/` — qayta ishlatiladigan laboratoriya (savdo qilmaydi, faqat tarixiy ma'lumot):
+
+| Fayl | Vazifasi |
+|---|---|
+| `lab.py` | V16 dvigatellari bilan backtest: look-ahead yo'q, xarajat (spred), savdoga teglar (rejim, H4, sessiya), statistika (E, PF, DD, CI) |
+| `costs.py` | MT5 demoda o'lchangan spredlar |
+| `baseline.py`, `baseline_v23.py` | strategiya x instrument x taymfreym, gross / net / stress xarajat |
+| `wf.py` | walk-forward (2 yil o'qitish / 6 oy test), Holm tuzatmasi, filtrlar (MACD, svecha, ATR, spred, yuqori TF), Sharpe |
+| `corr.py` | korrelyatsiya matritsasi |
+
+`agent/trading/exposure.py` — korrelyatsiya bo'yicha umumiy risk (`R_eff`, chegara 1.75%). Hozircha savdo oqimiga
+ulanmagan.
+
+**Haqiqat:** 5 yillik sinovda (BTC, ETH, XAU, EURUSD, GBPUSD, USTEC, US500; H1 va H4; spred bilan) hech bir strategiya
+ko'p sinov tuzatmasidan o'tmadi. Eng yaxshi natijalar kichik namunali va oltin o'sishiga bog'liq bo'lishi mumkin. Hech
+bir strategiya foydali deb isbotlanmagan.
+
+### MT5 pozitsiya monitoringi (V24, V25)
+
+`agent/trading/mt5_history.py` (faqat o'qish: bitimlar, buyurtmalar, pozitsiyalar) va `mt5_monitor.py`.
+
+- Har ~60 s: yangi pozitsiya, SL/TP o'zgarishi, yopilish. Yopilish xabari **faqat MT5 bitim tarixida OUT bitimi
+  tasdiqlangandan keyin** yuboriladi; sabab bitimning `reason` maydonidan: SL, TP, CLIENT (qo'lda), EXPERT, STOP_OUT.
+- Monitor ko'rmagan pozitsiyalar (agent o'chiq paytida yopilgan) tarixdan to'ldiriladi (standart 48 soat).
+- **Xabarlar faqat egasining SHAXSIY chatiga** (`private_chat_id`; `group_chat_id` dan alohida): POSITION OPENED / MODIFIED,
+  STOP LOSS HIT, TAKE PROFIT HIT, MANUAL CLOSE, POST-TRADE REPORT, MONITORING ERROR, MT5 CONNECTION LOST.
+  Manzil noto'g'ri bo'lsa xabar navbatda kutadi, boshqa joyga yo'naltirilmaydi.
+- **Navbat** (`notifications`): har hodisaga yagona kalit (`pv:closed:<id>` ...), dublikat yo'q; Telegram ishlamasa qayta urinish
+  (30 s, 2, 10, 30, 60 daqiqa); natijasi noma'lum holatda qayta yuboriladi va xabarga `↻` qo'yiladi.
+- **Savdo tahlili:** har yopilgan savdo uchun 8 bandli POST-TRADE REPORT va `data/trading/post_trade_analysis.json`
+  (kontekst, SL ATR da, R/R, MAE/MFE, tasdiqlanmagan mezonlar, gipotezalar). Natijalar `live_trades` jadvaliga ham
+  yoziladi. Bitta savdo asosida strategiya o'zgartirilmaydi.
+- Sozlamalar: `settings["monitor"]` (`enabled`, `poll_sec`, `backfill_h`).
 
 ---
 
@@ -589,6 +1001,18 @@ cd D:\it-agent
 | `tests/test_verification.py` | `Holat:` qatorini o'qish, kod faktlari bo'yicha qaror, matnni almashtirish |
 | `tests/test_personality.py` | `shaxsiyat.json` → matn, chegaraviy qiymatlar, buzilgan fayl |
 | `tests/test_studio.py` | kirill → lotin, skript validatsiyasi, holat mashinasi, sha256 bilan tasdiq, vaqtni o'qish, tugmalar, sahna vaqtlari, shriftda o'zbek harflari |
+| `tests/test_lifecycle.py` | bitta nusxa qulfi (va eski nusxa to'xtashini kutish), oldingi ish qanday tugagani (toza / egasi / qayta yuklash / kutilmagan), crash-loop hisobi, Telegram'ni kutish, ishga tushish xabari |
+| `tests/test_dashboard.py` | DN → tuzilma, manbalarni birlashtirish (maxfiy maydonlarsiz), `tuzilma.json`, jurnaldan topshiriq/hisobot, sessiya/Host/CSRF himoyasi, javoblarda parol/token/login yo'qligi, statik fayllar chegarasi, mahalliy registry/psutil qiymatlari |
+| `tests/test_artifacts.py` | A–F: formulali smeta yaratish, ИТОГО follow-up (shu faylning o'zi o'zgaradi; faqat chatda javob — PARTIAL), tayyor faylni yuborish (tasdiqlangan versiya, formulalar saqlangan), kichik o'zgarishda boshqa narsa o'zgarmaydi, hisob xatosida SUCCESS yo'q, qisqa follow-up faylga bog'lanadi; formula hisoblagichi, kesh qiymat, haqiqiy Excel bilan solishtirish |
+| `tests/test_trading.py` | tahlil yaratish (TRADE/NO-TRADE, o'zgarmaslik), strategiyani rejim bo'yicha aniqlash, look-ahead yo'qligi, Telegram formati, dublikatsiz nashr va message_id, kirish sharti, e'londan oldingi harakat, TP/SL va xarajat, noaniq sham (1m bilan aniqlash), versiyalar saqlanishi, eksperiment avtomatik faollashmasligi, statistika, SL tasnifi, kunlik hisobot, qayta ishga tushish, ma'lumot yo'qligi, dashboard faqat o'qish |
+| `tests/test_tradingview.py` | Pine generatsiyasi va asl ssenariy saqlanishi, annotatsiyalar soni, instrument va taymfreymni aniqlash, raqam/tartib tekshiruvi, xavfli Pine'ni rad etish, mavjud fayllarni saqlash va dublikatning oldini olish, qurilmani aniqlash (asosiy noutbuk / NB-XS-TEX02 / noaniq), integratsiya yo'qligi, OCR dalili (sarlavha yetarli emas, WRONG CHART, dublikat indikator), holat qoidalari, GUI kiritish gate'i, tool oqimi (Desktop + brauzer oynasi, begona sahifa rasmi o'chiriladi) |
+| `tests/test_mt5_trade.py` | MT5 DEMO savdo (V20): faqat DEMO, SL majburiy, lot/pozitsiya chegarasi, faqat o'zimizning pozitsiyalar, haqiqiy retcode, tasdiq darajasi |
+| `tests/test_mt5.py` | MT5 ulanishi (faqat o'qish, login berilmaydi, buyurtma funksiyasi bloklangan), rad etish holatlari (terminal yopiq, boshqa foydalanuvchi, hisobsiz, REAL, bir nechta terminal), tarixiy ma'lumot va server vaqti -> UTC, ma'lumot yo'qligi, simvol nomlari, gate (order DANGER, to'g'ridan-to'g'ri MT5 DANGER), trading_mt5_status; jonli testlar `MT5_LIVE=1` |
+
+| `tests/test_v21.py` | korrelyatsiya bo'yicha samarali risk, zararli strategiyalarni arxivlash (kod o'chirilmaydi, qayta faollashtirish saqlanadi) |
+| `tests/test_strategies_v23.py` | likvidlik tortishi, trend chizig'i (bounce/break), SNR rad etish: aniq qoidalar, bekor qilish, look-ahead yo'qligi, `candidate` holati |
+| `tests/test_signals.py` | ball (10 mezon, ma'lumot yo'q = signal yo'q), darajalar, xabar formati, `callback_data`, faqat egasi, bir marta bosish, dublikat, paper pozitsiya, muddat, Telegram xatolari |
+| `tests/test_mt5_monitor.py` | pozitsiya aniqlash, yopilish faqat tarix tasdig'idan keyin, SL/TP/qo'lda/EXPERT/STOP_OUT, navbat (qayta urinish, dublikat yo'q), faqat shaxsiy chat, POST-TRADE REPORT, uzilish ogohlantirishi |
 
 Testlar Telegram va Claude'ga ulanmaydi (obuna limiti sarflanmaydi).
 
@@ -598,8 +1022,10 @@ Testlar Telegram va Claude'ga ulanmaydi (obuna limiti sarflanmaydi).
 
 | Belgi | Yechim |
 |---|---|
-| Bot javob bermayapti | Jarayon bormi — 1-bo'limdagi buyruq. Yo'q bo'lsa `schtasks /run /tn AgentRestart`. Sababini `data\jurnal\console.log` (oxiri), `agent.log`, `restart.log` dan qidiring |
-| Kompyuter qayta yoqilgandan keyin bot jim | agent avtomatik ko'tarilmaydi (1-bo'lim) — `schtasks /run /tn AgentRestart` |
+| Bot javob bermayapti | `agentctl status`. Ishlamayotgan bo'lsa `agentctl start`; sababini `agentctl logs` (console.log) va `agent.log` dan qidiring |
+| Kompyuter qayta yoqilgandan keyin bot jim | `agentctl status`: "Avtostart" yoqilganmi, "To'xtatilgan: egasi" yozuvi yo'qmi. Internet kutilayotgan bo'lsa, `agent.log` da "Telegram'ga ulanib bo'lmadi" qatorlari bo'ladi |
+| `⛔ Agent 15 daqiqada N marta ishga tushdi` | agent har safar yiqilyapti. Sababini `agentctl logs` dan toping, tuzatgach `agentctl start` |
+| `agentctl status`: "VAZIFADAN TASHQARI" | agent terminalda qo'lda yoki eski usulda ochilgan. `agentctl restart` uni vazifaga o'tkazadi |
 | logda `getUpdates: 409` | bot ikki joyda ishlayapti (masalan, `AgentRestart` va `ITAgent` xizmati, yoki boshqa kompyuterdagi eski nusxa) — bittasini to'xtating |
 | `Claude obuna logini yaroqsiz` | 1a-bo'lim: agent ishlaydigan hisobda `claude auth login`; xizmat uchun `setup-token` → `CLAUDE_CODE_OAUTH_TOKEN`. Keyin `python -m agent --check` |
 | `⛔ Claude obuna limiti tugadi` | xabarda ko'rsatilgan vaqtda limit tiklanadi. Shungacha agent yangi topshiriq olmaydi (pullik API'ga o'tmaydi) |
@@ -629,10 +1055,13 @@ D:\it-agent\
   install.ps1             yangi serverga o'rnatish (venv, pwsh, NSSM xizmati, haftalik vazifa, ACL)
   uninstall.ps1           xizmat va vazifani o'chirish (ma'lumot qoladi)
   memory_backup.ps1       data\skill, xotira, skript → GitHub (maxfiy tekshiruvi bilan)
+  agentctl.ps1 / .cmd     agentni boshqarish: status, start, stop, restart, autostart, logs, install
   oynacha.cmd             ustki panelni ochish
+  dashboard.cmd           veb-dashboard (SENTINAL CONTROL CENTER) — 127.0.0.1:8790
   agent\
-    __main__.py           python -m agent [--check | --once "..." [--opus] | --init]
-    app.py                komponentlarni bog'lash, --check
+    __main__.py           python -m agent [--check | --once "..." [--opus] | --init]; oynasiz rejimda console.log
+    app.py                komponentlarni bog'lash, doimiy rejim (qulf, ishga tushish/to'xtash yozuvlari), --check
+    lifecycle.py          bitta nusxa qulfi, jarayon holati, oldingi ish qanday tugagani, crash-loop himoyasi
     config.py             .env o'qish va tekshirish
     workspace.py          AGENT_HOME papkalari va boshlang'ich fayllar
     bot.py, telegram_api.py   Telegram: ruxsat, buyruqlar, tasdiq/savol/parol, Reels tugmalari
@@ -640,7 +1069,10 @@ D:\it-agent\
     tasks.py              fon topshiriqlar, navbat, progress, /stop, limit
     loop.py               ReAct tool-loop (Claude Code CLI), prompt qatlamlari, yakuniy nazorat
     claude_cli.py         obuna: login tekshiruvi, env tozalash, limit holati
-    verification.py       Result Verification — yakuniy Holat
+    verification.py       Result Verification — yakuniy Holat (tizim va hujjat faktlari bo'yicha)
+    artifacts\            V15: formula.py (Excel formula hisoblagichi), xlsx.py (kesh qiymat, tuzilma, farq,
+                          ИТОГО), validate.py (tekshiruv), tracker.py (yaratilgan fayllar, yuborishdan oldin
+                          tekshiruv), store.py (faol ish, versiyalar), intent.py (follow-up va faylni aniqlash)
     personality.py        shaxsiyat.json → prompt matni
     gate.py               xavfsizlik-gate
     pending.py            bir martalik tasdiq/savol/parol kutishlari
@@ -652,6 +1084,12 @@ D:\it-agent\
     business.py           Telegram Business suhbatlari
     stt.py                ovozli xabar → matn (lokal faster-whisper)
     control.py, panel.py  ustki panel: mahalliy server va oyna
+    trading\              trading: data, indicators, strategies (+ strategies_smc), analysis, outcomes, analytics,
+                          review, backtest, publish, report, research, scheduler; MT5: mt5_connector (o'qish),
+                          mt5_trade (DEMO), mt5_history, mt5_monitor; signal_score, signals, exposure
+    dashboard\            veb-dashboard serveri (faqat o'qish): server.py (HTTP, sessiya, API), devices.py
+                          (manbalar va tuzilma), localsys.py (psutil + registry), activity.py (jurnal),
+                          chat.py (tool'larsiz veb-chat), agentstate.py (agent holati)
     weekly.py             haftalik xulosa (python -m agent.weekly)
     prompt_texnik.md      tool'lar bo'yicha texnik qo'shimcha
     ps\                   WinRM uchun PowerShell o'rami
@@ -660,10 +1098,18 @@ D:\it-agent\
     tools\                run_powershell, run_remote_ssh, call_http_api, read_file, write_file,
                           backup_before_change, write_skill, verify, log_history, remember,
                           request_credentials, inventory_set, list_inventory, generate_secret,
-                          ask_owner, notify_owner, send_business_message, reel_render, reel_list
+                          ask_owner, notify_owner, send_business_message, reel_render, reel_list,
+                          inspect_artifact, verify_artifact, excel_total,
+                          trading_report, trading_research_source, trading_experiment,
+                          trading_track_manual, tradingview_environment, tradingview_prepare, tradingview_verify,
+                          trading_mt5_status, trading_mt5_order
                           (+ Claude Code'ning WebSearch, WebFetch)
+  web\                    dashboard frontendi (Next.js + TypeScript + Tailwind) → npm run build → web\out
+  research\               strategiya laboratoriyasi (faqat tarixiy ma'lumot, savdo yo'q)
   tests\                  pytest testlari
   data\                   AGENT_HOME
     xotira\  skill\  skript\          → GitHub'ga tushishi mumkin
     maxfiy\  jurnal\  zaxira\  ish\  modellar\   → hech qachon
+    trading_memory\                  tadqiqot xotirasi: bazalar, tarixiy shamlar, lab natijalari (GitHub'ga tushmaydi)
+    trading\                         post_trade_analysis.json (savdo tahlili, GitHub'ga tushmaydi)
 ```
