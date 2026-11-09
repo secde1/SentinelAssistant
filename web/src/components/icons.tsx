@@ -92,3 +92,21 @@ export const IconPrint = (p: P) => (
 export const IconTrend = (p: P) => (
   <Base {...p}><path d="M3 17l6-6 4 4 8-8" /><path d="M14 7h7v7" /></Base>
 );
+export const IconBell = (p: P) => (
+  <Base {...p}><path d="M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8" /><path d="M10 20a2 2 0 0 0 4 0" /></Base>
+);
+export const IconCollapse = (p: P) => (
+  <Base {...p}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M15 10l-2 2 2 2" /></Base>
+);
+export const IconSun = (p: P) => (
+  <Base {...p}><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" /></Base>
+);
+export const IconBot = (p: P) => (
+  <Base {...p}><rect x="4" y="8" width="16" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9 16h6" /></Base>
+);
+export const IconFlask = (p: P) => (
+  <Base {...p}><path d="M9 3h6M10 3v6L4.5 19a1.5 1.5 0 0 0 1.3 2.2h12.4a1.5 1.5 0 0 0 1.3-2.2L14 9V3" /><path d="M7.5 15h9" /></Base>
+);
+export const IconChart = (p: P) => (
+  <Base {...p}><path d="M4 20V4M4 20h16" /><path d="M8 16v-4M8 10V8M13 16v-6M13 8V6M18 16v-3M18 11V9" /></Base>
+);

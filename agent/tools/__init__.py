@@ -12,7 +12,7 @@ import time
 
 from .. import gate
 from ..inventory import PlaceholderError
-from . import artifacts, files, http_api, knowledge, owner, powershell, reels, ssh, trading, tradingview, verify
+from . import artifacts, files, http_api, ideas, knowledge, owner, powershell, reels, ssh, trading, tradingview, verify
 from .base import ToolContext, ToolResult, ToolSpec, validate_args
 
 _INJECTION = re.compile(
@@ -104,6 +104,12 @@ def build_specs() -> list[ToolSpec]:
                  trading.classify_mt5_order,
                  lambda a: f"{a.get('action')} {a.get('symbol', '')} {a.get('side', '')} {a.get('lot', '')}"[:300],
                  counts_as_work=False),
+        ToolSpec("ideas_source", ideas.SOURCE_DESCRIPTION, ideas.SOURCE_SCHEMA, ideas.ideas_source, ideas.classify_internal,
+                 lambda a: f"{a.get('kind')} {a.get('url', '')}"[:300], counts_as_work=False),
+        ToolSpec("ideas_plan", ideas.PLAN_DESCRIPTION, ideas.PLAN_SCHEMA, ideas.ideas_plan, ideas.classify_internal,
+                 lambda a: str(a.get("title", ""))[:300], counts_as_work=False),
+        ToolSpec("ideas_list", ideas.LIST_DESCRIPTION, ideas.LIST_SCHEMA, ideas.ideas_list, ideas.classify_internal,
+                 lambda a: "bugungi topilmalar", counts_as_work=False),
         ToolSpec("trading_experiment", trading.EXPERIMENT_DESCRIPTION, trading.EXPERIMENT_SCHEMA, trading.experiment,
                  trading.classify_internal, lambda a: f"{a.get('strategy_id')} {a.get('params')}"[:300]),
         ToolSpec("tradingview_environment", tradingview.ENV_DESCRIPTION, tradingview.ENV_SCHEMA,

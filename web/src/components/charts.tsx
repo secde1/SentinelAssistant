@@ -3,6 +3,7 @@
 // Kichik SVG grafiklar (tashqi kutubxonasiz). Qoidalar: ingichka belgilar, 2px chiziq, bitta o'q, hover tooltip,
 // matn rangi — matn tokenlari (seriya rangi faqat belgida), 2+ seriyada legenda.
 import Link from "next/link";
+import { dateTime, timeOnly } from "@/lib/format";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 function useWidth<T extends HTMLElement>() {
@@ -113,7 +114,7 @@ export function LineChart({ series, labels, yMax, format, height = 220, ariaLabe
           {xTicks.map((i) => (
             <text key={i} x={x(i)} y={height - 6} fontSize={11} fill="var(--ink-3)"
               textAnchor={i === 0 ? "start" : i === n - 1 ? "end" : "middle"}>
-              {labels[i]?.slice(11, 16)}
+              {timeOnly(labels[i])}
             </text>
           ))}
           {series.map((s, si) => (
@@ -147,7 +148,7 @@ export function LineChart({ series, labels, yMax, format, height = 220, ariaLabe
       {hover !== null && width > 0 ? (
         <div className="pointer-events-none absolute z-10 rounded-lg border border-line bg-surface-2 px-3 py-2 text-xs shadow-xl"
           style={{ left: Math.min(x(hover) + 12, width - 170), top: pad.t }}>
-          <div className="mb-1 text-ink-3">{labels[hover]?.replace("T", " ")}</div>
+          <div className="mb-1 text-ink-3">{dateTime(labels[hover])}</div>
           {series.map((s) => (
             <div key={s.name} className="flex items-center gap-2 text-ink">
               <span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />

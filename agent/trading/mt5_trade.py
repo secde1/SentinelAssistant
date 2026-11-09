@@ -112,8 +112,30 @@ class DemoTrader:
                      "lot": p.volume, "open": p.price_open, "sl": p.sl, "tp": p.tp, "profit": p.profit}
                     for p in self._own(api)]
 
+    def symbol_spec(self, symbol: str) -> dict:
+        """Lot hisobi uchun simvol xususiyatlari + joriy spred (narx birligida). Faqat o'qish."""
+        with _LOCK:
+            api, _ = self._api()
+            try:
+                name = self.c.resolve(symbol)
+                info = self.c._ensure_selected(name)
+            except DataUnavailable as exc:
+                raise TradeRefused(str(exc)) from exc
+            tick = api.symbol_info_tick(name)
+            if tick is None or not tick.ask or not tick.bid:
+                raise TradeRefused(f"{name}: joriy narx yo'q (bozor yopiq bo'lishi mumkin)")
+            age = None  # kotirovka yoshi (soniya): tik vaqti (server) - UTC siljishi; siljish noma'lum bo'lsa None (tekshirilmaydi, taxmin yo'q)
+            try:
+                if getattr(tick, "time_msc", 0):
+                    age = max(0.0, self.c.clock().timestamp() - (tick.time_msc / 1000.0 - self.c.server_offset((name,))))
+            except Exception:  # noqa: BLE001 — yoshni aniqlab bo'lmasa narx baribir qaytariladi
+                age = None
+            return {"symbol": name, "tick_value": info.trade_tick_value, "tick_size": info.trade_tick_size,
+                    "volume_min": info.volume_min, "volume_step": info.volume_step, "volume_max": info.volume_max,
+                    "digits": info.digits, "ask": tick.ask, "bid": tick.bid, "spread": tick.ask - tick.bid, "quote_age_s": age}
+
     def open(self, symbol: str, side: str, lot: float, sl: float, tp: float | None = None, *,
-             dry_run: bool = False) -> dict:
+             dry_run: bool = False, comment: str | None = None) -> dict:
         side = side.lower()
         if side not in ("buy", "sell"):
             raise TradeRefused("side: buy yoki sell")
@@ -143,7 +165,7 @@ class DemoTrader:
                 raise TradeRefused(f"ochiq pozitsiyalar chegarasi: {self.max_positions}")
             req = {"action": api.TRADE_ACTION_DEAL, "symbol": name, "volume": lot,
                    "type": api.ORDER_TYPE_BUY if side == "buy" else api.ORDER_TYPE_SELL, "price": price,
-                   "sl": sl, "deviation": 20, "magic": MAGIC, "comment": COMMENT,
+                   "sl": sl, "deviation": 20, "magic": MAGIC, "comment": (comment or COMMENT)[:31],
                    "type_time": api.ORDER_TIME_GTC, "type_filling": self._filling(api, info)}
             if tp is not None:
                 req["tp"] = tp

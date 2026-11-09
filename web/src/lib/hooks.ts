@@ -60,3 +60,29 @@ export function usePageTitle(title: string) {
     document.title = `${title} · SENTINAL Control Center`;
   }, [title]);
 }
+
+
+const mem = new Map<string, string>();  // localStorage yopiq bo'lsa ham qiymat sessiya ichida saqlanadi
+const subs = new Set<() => void>();
+function subscribeStore(cb: () => void) {
+  subs.add(cb);
+  window.addEventListener("storage", cb);
+  return () => { subs.delete(cb); window.removeEventListener("storage", cb); };
+}
+
+/** Brauzer xotirasida saqlanadigan holat (SSR-xavfsiz: serverda va birinchi renderda `fallback`). Faqat per-viewer qulaylik uchun. */
+export function usePersisted<T>(key: string, fallback: T): [T, (v: T) => void] {
+  const raw = useSyncExternalStore(
+    subscribeStore,
+    () => { const m = mem.get(key); if (m !== undefined) return m; try { return localStorage.getItem(key); } catch { return null; } },
+    () => null,
+  );
+  const value = useMemo<T>(() => { if (raw === null) return fallback; try { return JSON.parse(raw) as T; } catch { return fallback; } }, [raw, fallback]);
+  const set = useCallback((v: T) => {
+    const text = JSON.stringify(v);
+    mem.set(key, text);
+    try { localStorage.setItem(key, text); } catch { /* xotira yopiq — mem ishlaydi */ }
+    subs.forEach((f) => f());
+  }, [key]);
+  return [value, set];
+}

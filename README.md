@@ -29,6 +29,8 @@ egasining tasdig'iga yuboradi. Takrorlanadigan ishni skillga aylantiradi, shunin
 | **MetaTrader 5** (V19-V25) | Faqat o'qish ma'lumoti, DEMO hisobda tasdiq bilan sinov savdosi, pozitsiya monitoringi va savdo tahlili |
 | **Signal tizimi** (V22) | 10 mezonli ball, Telegram signal + `callback_data` tugmalari, faqat PAPER pozitsiya |
 | **Strategiya laboratoriyasi** (V21, V23) | 5 yillik tarixiy sinov, in-sample/out-of-sample, walk-forward, ko'p sinov tuzatmasi, korrelyatsiya |
+| **Tungi tadqiqot** (V26) | Har kuni 21:00-05:00 GitHub, internet va YouTube'ni o'rganadi, yangi funksiyalar rejasini Excel va Word qilib shaxsiy chatga yuboradi |
+| **Chiqish papkasi** (V27) | `data\chiqish\` ga tashlangan fayl (docx, xlsx, pdf, csv, txt, png, jpg; 20 MB gacha) egasining shaxsiy chatiga yuboriladi va `yuborildi\` ga ko'chadi |
 | **TradingView** (V17) | Pine kodni tayyorlash va grafikka qo'yilganini OCR bilan tekshirish |
 
 **Qat'iy kafolatlar (kodda):** real pulli buyurtma avtomatik ochilmaydi; AUTO rejim yo'q; narx va indikator o'ylab
@@ -339,6 +341,8 @@ Hozirgi `.env` da: `REELS_ENABLED=1`, `REELS_PER_DAY=2`, `REELS_PREPARE_AT` bo's
 | `/trading_signal off\|dry\|live` | signal tizimi rejimi: o'chiq / faqat skanerlaydi (guruhga yubormaydi) / guruhga yuboradi |
 | `/trading_signal_test [SYMBOL]` | tugmalarni sinash: haqiqiy setup TEST belgisi bilan (statistikaga kirmaydi) |
 | `/trading_signallar` | signal va paper statistikasi |
+| `/tun`, `/tun on\|off` | tungi tadqiqot holati; yoqish / o'chirish |
+| `/tun_hisobot` | hozirgi tunning oraliq hisoboti (Excel + Word) |
 
 Tasdiq so'roviga **"ha"** / **"yo'q"** deb yoki tugma bilan javob bering. Bir nechta so'rov bo'lsa — kerakli
 xabarga reply qiling. Noaniq javob yoki 15 daqiqa jim turish **"yo'q"** deb hisoblanadi. "Ha" faqat o'sha bitta
@@ -799,8 +803,21 @@ Tool: `trading_mt5_status` — ulanish testi va bitta tarixiy ma'lumot testi.
 - **Tugmalar:** `callback_data` `sentinel:confirm:<ID>` / `sentinel:reject:<ID>` (URL emas, `/start` yubormaydi).
   Faqat egasi (`ALLOWED_USER_ID`) bosa oladi va faqat signal yuborilgan guruhda; boshqa a'zolar bossa hech narsa
   o'zgarmaydi. Holat atomik o'zgaradi (qayta bosish va ikki tugma bir vaqtda — faqat birinchisi o'tadi).
-- **HA** — faqat **PAPER** pozitsiya (simulyatsiya). Tasdiq paytida muddat, bekor qilish sharti, narx (SL/TP dan o'tmaganmi,
-  kirishdan 1 ATR dan uzoq emasmi) qayta tekshiriladi. **YO'Q** — pozitsiya ochilmaydi.
+- **HA** — paper pozitsiya (simulyatsiya) va, `settings["signals"]["demo_orders"]` yoqilgan bo'lsa, **MT5 DEMO** zdelka: lot
+  `demo_lot` (0.01), SL/TP signaldan, `order_check` -> `order_send` (faqat DEMO hisob, SL majburiy, lot va pozitsiyalar
+  chegarasi, shu simvol va yo'nalishda ochiq pozitsiya bo'lsa takroran kirilmaydi, kunlik zarar `daily_loss_pct` (5%) ga
+  yetgan bo'lsa ochilmaydi). TEST signal demo zdelka ochmaydi. Tasdiq paytida muddat, bekor qilish sharti, narx (SL/TP dan
+  o'tmaganmi, kirishdan 1 ATR dan uzoq emasmi) qayta tekshiriladi. **YO'Q** — hech narsa ochilmaydi.
+- **Chat:** `settings["signals"]["target"]` = `group` (guruh) yoki `private` (egasining shaxsiy chati). Tugmani faqat egasi, faqat
+  signal yuborilgan chatda bosa oladi.
+- **AUTO rejim (V28, faqat DEMO):** `/trading_mode analysis|confirm|auto`, `/trading_stop`, `/trading_flat`. `auto` faqat
+  `demo_orders` yoqilgan va `sizing = risk` bo'lganda yoqiladi. STRONG/CONFIRM signalni egasi tugmasisiz tasdiqlaydi (hamma
+  himoya HA bilan bir xil). Zdelka **guruhi**: lot 1% riskdan (`risk_pct`), SL kamida 1 ATR(1h), 2 ta pozitsiya: A — yaqin TP
+  (`tp1_r` * R), B — to'liq TP; himoyalar: kunlik zarar 5%, ochiq guruhlar soni (`max_groups`, avval 1), shu simvolda takroriy
+  kirish yo'q, korrelyatsiya (`exposure.py`), spred <= riskning 10%, R/R >= 1.5. Boshqaruv: `time_stop_h` (48 soat) dan keyin
+  qolgan pozitsiyalar yopiladi. **Aylanma o'chirgich:** ketma-ket 3 guruh zarar yoki cho'qqidan 10% pasayish -> AUTO o'chadi,
+  CONFIRMATION ga qaytadi va shaxsiy chatga xabar keladi. Jadval: `demo_groups`. Eslatma: lot `MT5_MAX_LOT` bilan cheklanadi
+  va broker minimumidan kam bo'lsa zdelka ochilmaydi (kichik balans!).
 - **Dublikat:** instrument + yo'nalish uchun faol signal yoki cooldown (4 soat) ichidagi signal qayta yuborilmaydi.
 - **Rejimlar:** `off` · `dry` (skanerlaydi, yubormaydi — standart) · `live`.
 - Jadvallar: `signals`, `paper_positions`, `signal_events`.
@@ -845,6 +862,97 @@ bir strategiya foydali deb isbotlanmagan.
   (kontekst, SL ATR da, R/R, MAE/MFE, tasdiqlanmagan mezonlar, gipotezalar). Natijalar `live_trades` jadvaliga ham
   yoziladi. Bitta savdo asosida strategiya o'zgartirilmaydi.
 - Sozlamalar: `settings["monitor"]` (`enabled`, `poll_sec`, `backfill_h`).
+
+### Trading bo'limi, veb-boshqaruv va kichik balans (V29)
+- **Kichik balans:** `signals.min_lot_fallback` (standart o'chiq) yoqilsa va 1% risk brokerning minimal lotiga yetmasa, minimal lot
+  bilan kiradi (bitta pozitsiya, bo'linmaydi). Haqiqiy risk xabarda ko'rsatiladi; `min_lot_max_risk_pct` (8%) dan oshsa zdelka
+  OCHILMAYDI (masalan $49 balansda XAU 41% — rad; BTC 6.2%, ETH 2.7%, EURUSD 4.6%). Faqat DEMO.
+- **Claude xodimlari** (`agent/staff/`, obuna orqali, pullik API yo'q, tool yo'q): DIR-1 (direktor), NEWS-1, STRAT-1,
+  DEBATE-A..D (bahschilar), AUDIT-1, RISK-1, HIST-* . AUTO rejimda signal avval muhokama qilinadi: NEWS-1 kalendar xulosasi ->
+  4 bahschi mustaqil ovoz -> (fikr bo'lingan bo'lsa) 2-raund -> DIR-1. **Qoida kodda:** kamida 3/4 `approve` VA DIR-1 `approve`;
+  har qanday xato/kvota/noaniqlik = zdelka ochilmaydi. Ruxsat bo'lsa ham lot, SL, limitlar, korrelyatsiya, o'chirgich baribir
+  tekshiriladi (xodimlar ularni o'zgartira olmaydi). `signals.staff_gate=false` — bahssiz eski xulq. Hammasi `staff_messages`
+  va `staff_decisions` jadvallarida. **AUDIT-1** yopilgan zararli guruhni bir marta tahlil qiladi (shaxsiy chatga + bazaga).
+  Ismlar: `agent/staff/roster.py`.
+- **Veb-sahifalar** (dashboard, `127.0.0.1:8790`): *Trading bo'limi* (xodimlar kartalari, jonli muhokama chati, animatsiya),
+  *Signallar* (+ "Jamoaga" tugmasi), *Pozitsiyalar* (monitor har daqiqa `position_snapshot` ga yozadi), *Boshqaruv*
+  (rejim analysis/confirm/auto, AUTO to'xtatish, hammasini yopish — har birida tasdiq). Veb faqat `control_commands` jadvaliga
+  buyruq qo'yadi; agent (`agent/webcontrol.py`, har 3 soniya) bajaradi va hamma himoyani o'zi tekshiradi. Buyruq ro'yxati qat'iy.
+- **Veb-terminal (UI redizayn, branch `ui-terminal`):** faqat trading sahifalari: Dashboard (KPI, Market Overview, Equity,
+  Trading Activity, AI Agents), Trading bo'limi (agent kartalari + drawer + Discussion Room), Signallar (saralash/filtr/qidiruv,
+  qatorni bosganda tahlil drawer'i, kutilayotgan signalda HA/YO'Q/Jamoaga), Pozitsiyalar (MT5 DEMO va Paper alohida),
+  Boshqaruv, Trading Research, Agentlar, Hisobotlar, Sozlamalar (faqat o'qish). Yig'iladigan sidebar, header holatlari
+  (agent/MT5/Telegram/Research — ma'lumot bo'lmasa N/A), yorug'/qorong'i mavzu, toast. Yangi o'qish endpoint'lari:
+  `/api/desk/status|dashboard|market|signal`; market narxi Binance ochiq API (XAU/EUR/GBP — proksi, belgilangan).
+  Veb `confirm`/`reject` buyruqlari Telegram tugmasi bilan AYNAN bir xil `handle_callback` yo'lidan o'tadi (egasi, DEMO, himoyalar).
+- **Zona skanerlari ZONE-1..5** (`agent/zones/`, faqat o'qish): butun bozor — Binance USDT juftliklari (hajmi >= $1M, ~110) va
+  MT5 DEMO terminalidagi to'liq savdoga ochiq simvollar (~220: forex, metall, indeks, kripto) — har ~5 daqiqada skanerlanadi.
+  ZONE-1 S/R (1h), ZONE-2 diapazon/siqilish, ZONE-3 4h darajalar, ZONE-4 impuls boshlangan joy, ZONE-5 likvidlik (teng yuqori/pastlar).
+  Zonalar **kodda hisoblanadi** (LLM taxmin qilmaydi), `zones` jadvaliga yoziladi; narx zona ichida yoki 0.5 ATR yaqinda bo'lsa — AKTIV.
+  Aktivlari chatga (kind=`zone`) tushadi; DEBATE-C/DEBATE-B/DIR-1 muhokamasi soatiga `consult_per_hour` (3) marta (kvota), natijasi faqat
+  "kuzatuv" belgisi — **zona zdelka ochmaydi**. Ish jarayoni `staff_activity` jadvalida (dashboard va Agentlar sahifasi ko'rsatadi).
+  Sozlama: `trading_memory/config/research_settings.json` -> `zones` (enabled, every_s, min_quote_volume, max_binance, max_mt5, ...).
+  Eslatma: MT5 simvollarini o'qish ularni Market Watch'ga qo'shadi (terminal ro'yxati kengayadi).
+- **Discussion Room'ga yozish va xodimlarning ishi (V30):** veb chatdagi yozuv maydoni (`say` buyrug'i) -> DIR-1 vazifalarni
+  1-4 xodimga taqsimlaydi -> ular bajaradi (bazadan olingan faktlar bilan) -> DIR-1 yakuniy javob beradi; hammasi chatda. Soatiga
+  24 ta LLM so'rovi limiti (obuna kvotasi). Xodimlar faqat matn qaytaradi: xavf limitlari, lot/SL, REAL hisob va zdelka ochish ularda yo'q
+  (bunday topshiriqni sababi bilan rad etadi). Davriy ishlar LLM'siz (`agent/staff/routine.py`): RISK-1 har 30 daq (himoyalar holati),
+  HIST-MA/TF/VOL va STRAT-1 har 2 soat (strategiya statistikasi/reyting), NEWS-1 3 soat (kalendar), AUDIT-1 6 soat, DIR-1 2 soat
+  (smena hisoboti). DEBATE-A..D signal va zona muhokamasida, topshiriqlarda gapiradi.
+- **DIR-1 zona vazifasi (V31):** har skaner o'tishidan keyin DIR-1 aktiv zonalardan eng kuchlisini (kuch >= 20, kripto: Binance'da ham,
+  MT5 DEMO'da ham bor) signalga aylantiradi (`ZON-...`, tier `ZONE`): kirish = narx, SL = zona chegarasidan 0.25 ATR tashqarida (kamida 1 ATR),
+  TP = eng yaqin qarshi zona (topilmasa 2R), R/R (xarajatdan keyin) >= 1.5 bo'lmasa — rad. Keyin signal tizimining O'ZINING yo'li:
+  xodimlar bahsi (>=3/4 + DIR-1) -> revalidate -> 1% risk, SL>=1 ATR, korrelyatsiya, max guruh, kunlik zarar, DemoTrader (faqat DEMO).
+  Faqat `trade_mode=auto` da ishlaydi; bahs rad etsa signal egasi tugmasi uchun qoladi. Bitta o'tishda max 1 urinish, instrument uchun 6 soat kuldaun.
+  **Zdelka ochilgach:** DIR-1 ZONE-1..5 ga yangi shart beradi (`meta.zone_directive`): ochiq instrumentni chetlab o'tish, e'lon uchun
+  kuch >= (kuch chegarasi+10), navbat uchun R/R >= 2 tayyor rejalar (chatda "Navbat"). Pozitsiya yopilgach shart bekor bo'ladi.
+  Sozlama: `zones.trade_enabled` (standart true), `trade_min_strength`, `trade_cooldown_h`, `trade_min_rr`.
+- **Grafik (`/chart/`) va instrumentlar:** ro'yxat HAQIQIY manbalardan (`/api/desk/instruments`, 10 daqiqa kesh): Binance Spot (`exchangeInfo`,
+  faqat TRADING, ~1370), Binance Futures USDT-M/COIN-M (ulanish bo'lsa; ulanmasa selektorda "ulanmagan" va sabab ko'rsatiladi) va MT5 `symbols_get`
+  (~357; kategoriya brokerning haqiqiy yo'lidan: Forex, Metals, Indices, Stocks, Commodities, Crypto). Selektor: qidiruv, bozor/kategoriya tablari,
+  sevimlilar, "DEMO savdo" va aktiv zona belgilari. Chizma lightweight-charts canvas qatlamida (pane ichida kesiladi): zonalar tur bo'yicha
+  (Support/Resistance/Demand/Supply/Liquidity/Diapazon — alohida yoqish/o'chirish), bir xil zonalar birlashtiriladi, yorliqlar to'qnashmaydi
+  (ustunlarga/siljitib joylanadi), Entry/SL/TP/Pozitsiya haqiqiy narxda, tooltip'da to'liq ma'lumot. Taymfreymlar: 1m 5m 15m 30m 1h 4h 1d.
+- **Audit va diagnostika (2026-11-09):** to'liq hisobot `AUDIT-2026-11-09.md`. Asosiy topilma: XAU/USD va EUR/USD skanerdan abadiy chiqib ketgan
+  edi (hafta oxiri shamlari "ma'lumot xatosi" deb rad etilardi) — tuzatildi (faqat forex/metall/indeks uchun; kripto qoidasi o'zgarmadi).
+  Skaner izi `scan_log` jadvalida (instrument x strategiya x bosqich + ANIQ sabab, 14 kun) va har skan jurnalga `scan_funnel` bo'lib yoziladi.
+  Veb: "Diagnostika" sahifasi (`/api/desk/diagnostics`): komponent holati, so'nggi faollik/xato, ish vaqti, bajarilgan/xato soni, voronka, rad etish sabablari.
+- **Ijro quvuri ishonchliligi (V32, `IMPLEMENTATION-REPORT.md`):** strategiya/risk/R/R/bahs/lot formulasi O'ZGARMAGAN. (1) `signals.exec_status`
+  (GENERATED, WATCH, DEBATE_PENDING/APPROVED/REJECTED, RISK_VALIDATION_PENDING, EXECUTION_READY, EXECUTED, EXECUTION_REFUSED, INVALIDATED, EXPIRED)
+  + `origin` (auto/manual/forced_test/test); eski `status` orqaga moslik uchun qoladi, lekin ijro rad etilsa endi `REFUSED` (CONFIRMED emas);
+  eski qatorlar uchun holat `agent/trading/lifecycle.py` da hisoblanadi (tarix o'zgarmaydi). (2) SIG signal tugmadan OLDIN `precheck` (`_group_plan`:
+  kotirovka yangiligi, R/R, spred, minimal lot/risk, guruh/korrelyatsiya/kunlik zarar) — rad bo'lsa tugmasiz xabar + aniq sabab; ijro paytida yana
+  qayta tekshiriladi. (3) `paper_positions.dataset` = EXECUTABLE | COUNTERFACTUAL | TEST: statistika va KPI faqat EXECUTABLE. (4) `execution_audit`
+  jadvali: har ijro urinishi (bahs, risk, qaror, bosqich, sabab, `mt5_request` NOT_SENT/CHECK_REJECTED/SENT_OK/SENT_REJECTED, retcode, kelib chiqish).
+  (5) Veb: "Ijro voronkasi" (`/api/desk/execution`) signallar sahifasida, Pozitsiyalarda alohida Counterfactual/Sinov tablari.
+- **Avtostart:** Task Scheduler vazifasi `SentinalDashboard` (Windows'ga kirganda, 30 s kechikish, `pythonw -m agent.dashboard
+  --no-browser`, xato bo'lsa qayta ishga tushadi). O'chirish: `Unregister-ScheduledTask SentinalDashboard`. Kirish tokeni
+  `data/ish/dashboard.json` da; `dashboard.cmd` brauzerni token bilan ochadi.
+
+### Tungi tadqiqot (V26)
+
+`agent/nightly.py`, tool'lar `agent/tools/ideas.py`. **Har kuni** avtomatik (Toshkent vaqti), tun D kuni 21:00 da boshlanib
+D+1 kuni 05:00 da tugaydi:
+
+| Vaqt | Faza | Nima qiladi |
+|---|---|---|
+| 21:00 | `github` | GitHub'da yangi va mashhur loyihalar (IT-avtomatlashtirish, agentlar, xotira/skill, backtesting, xavfsizlik): README, litsenziya, oxirgi yangilanish |
+| 22:00 | `internet` | maqola, hujjat, yangilik: agent arxitekturasi, avtomatlashtirish, xavfsizlik, backtest xatolari |
+| 23:00 | `youtube` | YouTube videolari. **Video ko'rilmaydi**: faqat sarlavha, kanal, tavsif va ochiq sahifa matni |
+| 00:30 | `plan` | topilmalar va README dagi mavjud imkoniyatlar asosida 5-10 ta YANGI funksiya rejasi (`ideas_plan`) |
+| 05:00 | `deliver` | `SENTINEL_NIGHT_PLAN_YYYY-MM-DD.xlsx` va `.docx` hosil qilinadi va **shaxsiy chatga** yuboriladi |
+
+- Har faza alohida Claude topshirig'i; bir vaqtda faqat bittasi. Topilma va reja bandlari `data\tadqiqot\ideas.db` ga
+  tool'lar orqali yoziladi, **fayllarni kod hosil qiladi** (Claude emas).
+- **Excel:** `Rejalar` (muhimlik, foyda, tavsif, hajm S/M/L, xavf, xavfsizlik, testlar, manbalar, holat «TASDIQ KUTILMOQDA»),
+  `Manbalar`, `Xulosa`. **Word:** sarlavha, xulosa, har funksiya bo'limi, manbalar jadvali, cheklovlar.
+- **Xavfsizlik:** faqat o'qish va reja. Hech narsa o'rnatilmaydi, begona kod yuklab olinmaydi va ishga tushirilmaydi,
+  asosiy loyihaga qo'shilmaydi; veb-sahifa matni ishonchsiz (undagi ko'rsatmalarga bo'ysunilmaydi). Hammasi taklif: amalga
+  oshirish faqat egasining tasdig'i bilan. Litsenziya va yangilanish sanasi sahifada ko'ringan bo'lsagina yoziladi.
+- **O'chiq paytda:** faza `jobs` jadvalida kutadi. Topilma fazalari reja boshlangunga qadar, reja ertasi kuni 12:00 gacha
+  bajariladi (hisobotda «kechikkan»). O'rnatishdan oldin boshlangan tun o'tkazib yuboriladi (bo'sh hisobot yuborilmaydi).
+  Obuna limiti tugagan bo'lsa faza kutadi.
+- Sozlama: `data\tadqiqot\config.json` (vaqtlar, `enabled`, `plan_items`). Natija: `data\tadqiqot\YYYY-MM-DD\`.
 
 ---
 
@@ -1014,6 +1122,8 @@ cd D:\it-agent
 | `tests/test_signals.py` | ball (10 mezon, ma'lumot yo'q = signal yo'q), darajalar, xabar formati, `callback_data`, faqat egasi, bir marta bosish, dublikat, paper pozitsiya, muddat, Telegram xatolari |
 | `tests/test_mt5_monitor.py` | pozitsiya aniqlash, yopilish faqat tarix tasdig'idan keyin, SL/TP/qo'lda/EXPERT/STOP_OUT, navbat (qayta urinish, dublikat yo'q), faqat shaxsiy chat, POST-TRADE REPORT, uzilish ogohlantirishi |
 
+| `tests/test_nightly.py` | tun kaliti va faza vaqtlari, jadval (ketma-ketlik, o'tkazib yuborish, kechikish, limit), baza dublikatsiz, Excel/Word fayllarining to'g'riligi, shaxsiy chatga yuborish va qayta urinish, tool'lar, `/tun` buyrug'i |
+
 Testlar Telegram va Claude'ga ulanmaydi (obuna limiti sarflanmaydi).
 
 ---
@@ -1090,6 +1200,8 @@ D:\it-agent\
     dashboard\            veb-dashboard serveri (faqat o'qish): server.py (HTTP, sessiya, API), devices.py
                           (manbalar va tuzilma), localsys.py (psutil + registry), activity.py (jurnal),
                           chat.py (tool'larsiz veb-chat), agentstate.py (agent holati)
+    nightly.py            V26 tungi tadqiqot: jadval, ideas.db, Excel + Word hisobot
+    outbox.py             V27 chiqish papkasi: fayllarni shaxsiy chatga yuborish
     weekly.py             haftalik xulosa (python -m agent.weekly)
     prompt_texnik.md      tool'lar bo'yicha texnik qo'shimcha
     ps\                   WinRM uchun PowerShell o'rami
@@ -1102,7 +1214,7 @@ D:\it-agent\
                           inspect_artifact, verify_artifact, excel_total,
                           trading_report, trading_research_source, trading_experiment,
                           trading_track_manual, tradingview_environment, tradingview_prepare, tradingview_verify,
-                          trading_mt5_status, trading_mt5_order
+                          trading_mt5_status, trading_mt5_order, ideas_source, ideas_plan, ideas_list
                           (+ Claude Code'ning WebSearch, WebFetch)
   web\                    dashboard frontendi (Next.js + TypeScript + Tailwind) → npm run build → web\out
   research\               strategiya laboratoriyasi (faqat tarixiy ma'lumot, savdo yo'q)
@@ -1112,4 +1224,5 @@ D:\it-agent\
     maxfiy\  jurnal\  zaxira\  ish\  modellar\   → hech qachon
     trading_memory\                  tadqiqot xotirasi: bazalar, tarixiy shamlar, lab natijalari (GitHub'ga tushmaydi)
     trading\                         post_trade_analysis.json (savdo tahlili, GitHub'ga tushmaydi)
+    tadqiqot\                        tungi tadqiqot: ideas.db, config.json, YYYY-MM-DD\ (Excel + Word)
 ```

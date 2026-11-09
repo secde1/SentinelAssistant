@@ -184,6 +184,7 @@ class AgentRunner:
         self.quota = claude_cli.QuotaGuard()
         self.plan = "obuna"
         self.last_limits = ""  # oxirgi rate_limit_event bo'yicha: "5 soatlik 37%, haftalik 22%"
+        self._quota_warned: set[tuple] = set()  # (limit turi, tiklanish vaqti): "limit yaqin" ogohlantirishi har oynada BIR marta
 
     def _static_system(self) -> str:
         """Ish qoidalari (SYSTEM_PROMPT.md) -> shaxsiyat (SHAXSIYAT.md + shaxsiyat.json) -> Reels studiyasi
@@ -593,8 +594,10 @@ class AgentRunner:
                                status=info.status, type=info.rate_limit_type, resets_at=info.resets_at,
                                overage=info.overage_status, using_overage=bool(raw.get("isUsingOverage")))
             raise claude_cli.quota_stop(info.rate_limit_type, info.resets_at)
-        if info.status == "allowed_warning" and not run.warned:
+        window = (info.rate_limit_type, info.resets_at)
+        if info.status == "allowed_warning" and not run.warned and window not in self._quota_warned:
             run.warned = True
+            self._quota_warned.add(window)  # keyingi topshiriqlarda shu oyna uchun qayta yozilmaydi
             self.journal.event("quota_warning", f"Obuna limiti yaqin: {status.plan_note}", task=ctx.task_id)
             with suppress(Exception):
                 await channel.send(f"⚠️ {ctx.task_id}: Claude obuna limiti yaqin ({status.plan_note or info.rate_limit_type}). "

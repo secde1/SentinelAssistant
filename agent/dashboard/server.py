@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import re
 import logging
 import mimetypes
 import secrets
@@ -37,6 +38,8 @@ from .agentstate import agent_status
 from .devices import DeviceCatalog, hierarchy
 from .localsys import LocalInventory, Sampler
 from .settings import DashboardSettings
+from .desk_api import ApiError as DeskError
+from .desk_api import DeskView
 from .trading_api import TradingView
 
 log = logging.getLogger(__name__)
@@ -74,6 +77,7 @@ class DashboardApp:
         self.sampler = Sampler(settings.sample_sec, settings.history_points)
         self.catalog = DeviceCatalog(paths.home, self.inventory, settings.ad_exports, self.local, settings.stale_days)
         self.trading = TradingView(paths.home)  # faqat o'qish (sqlite mode=ro)
+        self.desk = DeskView(paths.home)  # bo'lim/signal/pozitsiya (o'qish) + boshqaruv buyruqlari (control_commands)
         self.sessions: dict[str, float] = {}
         self._fails: deque = deque(maxlen=50)
         self._lock = threading.Lock()
@@ -176,6 +180,43 @@ class DashboardApp:
                 return {"items": self.trading.table(path[len("/api/trading/"):])}
             except KeyError:
                 raise ApiError(404, "Not found") from None
+        try:
+            if method == "GET" and path == "/api/desk/staff":
+                return self.desk.staff()
+            if method == "GET" and path == "/api/desk/messages":
+                return self.desk.messages(int(q.get("after", "0") or 0))
+            if method == "GET" and path == "/api/desk/signals":
+                return self.desk.signals()
+            if method == "GET" and path == "/api/desk/zones":
+                return self.desk.zones(q.get("status", ""), q.get("symbol", ""))
+            if method == "GET" and path == "/api/desk/instruments":
+                return self.desk.instruments(force=q.get("refresh") == "1")
+            if method == "GET" and path == "/api/desk/chart":
+                return self.desk.chart(q.get("symbol", "BTCUSDT"), q.get("tf", "1h"), q.get("market", ""))
+            if method == "GET" and path == "/api/desk/signal":
+                return self.desk.signal_detail(q.get("id", ""))
+            if method == "GET" and path == "/api/desk/positions":
+                return self.desk.positions()
+            if method == "GET" and path == "/api/desk/diagnostics":
+                return self.desk.diagnostics()
+            if method == "GET" and path == "/api/desk/execution":
+                return self.desk.execution()
+            if method == "GET" and path == "/api/desk/status":
+                return self.desk.status()
+            if method == "GET" and path == "/api/desk/market":
+                return self.desk.market()
+            if method == "GET" and path == "/api/desk/dashboard":
+                return self.desk.dashboard()
+            if method == "GET" and path == "/api/desk/control":
+                return self.desk.control_state()
+            if method == "GET" and path == "/api/desk/command":
+                return self.desk.command_status(int(q.get("id", "0") or 0))
+            if method == "POST" and path == "/api/desk/command":
+                return self.desk.command(str(body.get("cmd", "")), str(body.get("arg", "")))
+        except DeskError as exc:
+            raise ApiError(exc.status, exc.message) from None
+        except ValueError:
+            raise ApiError(400, "Noto'g'ri parametr") from None
         if method == "POST" and path == "/api/monitoring/refresh":
             return self.refresh_local()
         if method == "POST" and path == "/api/chat":
@@ -512,6 +553,11 @@ def make_handler(app: DashboardApp):
                 target = target / "index.html"
             elif not target.is_file() and target.with_suffix(".html").is_file():
                 target = target.with_suffix(".html")
+            if not target.is_file():  # Next prefetch: /chart/__next.chart.__PAGE__.txt -> /chart/__next.chart/__PAGE__.txt
+                m = re.fullmatch(r"(__next\..+)\.(__PAGE__\.txt)", target.name)
+                alt = target.parent / m.group(1) / m.group(2) if m else None
+                if alt is not None and alt.is_file() and alt.resolve().is_relative_to(web_dir):
+                    target = alt.resolve()
             status = 200
             if not target.is_file():
                 target, status = web_dir / "404.html", 404

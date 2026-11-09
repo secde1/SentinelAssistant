@@ -59,6 +59,14 @@ DEFAULTS: dict[str, Any] = {
     # V22 signal tizimi. mode: off | dry (skanerlaydi, Telegramga yubormaydi) | live. Faqat PAPER trading.
     "monitor": {"enabled": True, "poll_sec": 60, "backfill_h": 48, "test_pending": False, "republish": []},  # V24: MT5 pozitsiya monitoringi (faqat o'qish)
     "signals": {"mode": "dry", "scan_sec": 900, "cooldown_h": 4, "tolerance_atr": 1.0,
+                "target": "group",  # signal chati: group | private
+                "demo_orders": False, "demo_lot": 0.01, "daily_loss_pct": 5.0,  # HA -> MT5 DEMO zdelka (faqat DEMO)
+                # V28: sizing=risk -> lot 1% riskdan, zdelka 2 ga bo'linadi (A: tp1_r*R, B: to'liq TP); trade_mode: confirm | auto
+                "trade_mode": "confirm", "sizing": "fixed", "risk_pct": 1.0, "min_sl_atr": 1.0, "split": True, "tp1_r": 1.0,
+                "max_groups": 1, "time_stop_h": 48, "max_spread_sl": 0.10, "auto_min_tier": "CONFIRM",
+                "breaker_losses": 3, "breaker_dd_pct": 10.0,
+                "staff_gate": True,  # AUTO: signalni avval Claude xodimlari muhokama qiladi (min 3/4 + DIR-1)
+                "min_lot_fallback": False, "min_lot_max_risk_pct": 8.0,  # kichik balans: minimal lot, risk chegarasi bilan (faqat DEMO)
                 "universe": ["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT", "XAU/USD", "EUR/USD"]},
     "publish": {"enabled": True, "outcome_updates": True, "daily_report": True, "analyses": True},
     "group_chat_id": None,

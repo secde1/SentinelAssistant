@@ -9,6 +9,7 @@ import sys
 import traceback
 from contextlib import suppress
 from datetime import datetime
+from pathlib import Path
 
 from . import claude_cli, proactive
 from .bot import TelegramBot, TelegramChannel
@@ -114,6 +115,10 @@ async def run_service(cfg: Config, paths: Paths, redactor: Redactor, inventory: 
         trading_job = _start_trading(cfg, paths, journal, bot)
         if trading_job is not None:
             background.append(trading_job)
+    night_job = _start_nightly(cfg, paths, journal, bot)
+    if night_job is not None:
+        background.append(night_job)
+    background.append(_start_outbox(cfg, paths, bot))
     control = None
     if cfg.control_enabled and cfg.control_port > 0:
         from .control import ControlServer
@@ -140,6 +145,47 @@ def _safe(fn, default):
         return fn()
     except Exception:  # noqa: BLE001 — MT5 yopiq bo'lsa ham xabar yuborish to'xtamasin
         return default
+
+
+def _start_outbox(cfg: Config, paths: Paths, bot: TelegramBot):
+    """data/chiqish/ papkasiga tashlangan fayllar egasining shaxsiy chatiga yuboriladi (V27)."""
+    from .outbox import Outbox, run_forever
+
+    async def send_file(path, caption: str) -> bool:
+        try:
+            await bot.api.send_document(cfg.allowed_chat_id, path, bot.redactor.redact(caption))
+            return True
+        except Exception as exc:  # noqa: BLE001
+            log.error("Chiqish fayli yuborilmadi: %s", exc)
+            return False
+
+    return asyncio.create_task(run_forever(Outbox(Path(paths.home) / "chiqish", send_file, bot.send_text)), name="chiqish-papkasi")
+
+
+def _start_nightly(cfg: Config, paths: Paths, journal: Journal, bot: TelegramBot):
+    """Tungi tadqiqot (V26): har kuni 21:00-05:00 GitHub/internet/YouTube -> yangi funksiyalar rejasi (Excel + Word) shaxsiy chatga."""
+    try:
+        from .nightly import NightIdeas, run_forever
+
+        async def submit(prompt: str) -> str | None:
+            return await bot.tasks.submit(TaskRequest(id=bot.tasks.new_id(), text=prompt, auto=True))
+
+        async def send_file(path, caption: str) -> bool:
+            try:  # FAQAT egasining shaxsiy chatiga
+                await bot.api.send_document(cfg.allowed_chat_id, path, bot.redactor.redact(caption))
+                return True
+            except Exception as exc:  # noqa: BLE001
+                log.error("Tungi hisobot fayli yuborilmadi: %s", exc)
+                return False
+
+        night = NightIdeas(Path(paths.home) / "tadqiqot", submit, lambda tid: tid in bot.tasks.active,
+                           bot.tasks.runner.unavailable_reason, bot.send_text, send_file, journal=journal)
+        bot.nightly = night
+        journal.event("night_ideas", "Tungi tadqiqot yoqildi", enabled=night.cfg.get("enabled", True))
+        return asyncio.create_task(run_forever(night), name="tungi-tadqiqot")
+    except Exception:  # noqa: BLE001 — xato bo'lsa ham bot ishlayveradi
+        log.exception("Tungi tadqiqot ishga tushmadi")
+        return None
 
 
 def _start_trading(cfg: Config, paths: Paths, journal: Journal, bot: TelegramBot):
@@ -189,9 +235,43 @@ def _start_trading(cfg: Config, paths: Paths, journal: Journal, bot: TelegramBot
             candles_fn=lambda sym, tf, limit, end: svc.mt5.candles(sym, tf, limit, end=end),
             currency_fn=lambda: _safe(hist.currency, "USD"), contract_fn=lambda sym: _safe(lambda: hist.contract_size(sym), None),
             journal=journal)
-        bot.signals = scheduler.signals = SignalService(svc, send_signal, edit_signal, cfg.allowed_user_id, journal)
+        bot.signals = scheduler.signals = SignalService(svc, send_signal, edit_signal, cfg.allowed_user_id, journal,
+                                                        trader=svc.mt5_trader if sys.platform == "win32" else None, history=hist)
+        sv = scheduler.signals
+        sv.notify_private = notify_private = scheduler.notify_owner
+        try:  # Claude xodimlari bo'limi (obuna, tool yo'q); ulanmasa signal tizimi bahssiz ishlayveradi
+            from .staff.desk import Desk
+            from .staff.llm import make_llm
+            sv.desk = Desk(svc.db, make_llm(cfg, paths.home), calendar=svc.calendar,
+                           zone_min_approvals=int((svc.settings.data.get("zones") or {}).get("zone_min_approvals", 3)))
+        except Exception:  # noqa: BLE001
+            log.exception("Xodimlar bo'limi ulanmadi")
+        from .webcontrol import WebControl
+        routine = None
+        if sv.desk is not None:
+            from .staff.routine import StaffRoutine
+            routine = StaffRoutine(sv.desk, svc.db, lambda: sv.cfg, calendar=svc.calendar)
+        web = WebControl(sv, notify_private, routine)
         journal.event("trading", "Trading tadqiqoti yoqildi (paper trading)", group=svc.settings.group_chat_id)
-        return asyncio.create_task(scheduler.run(), name="trading-tadqiqot")
+
+        jobs = [scheduler.run(), web.run()] + ([routine.run()] if routine is not None else [])
+        try:  # ZONE-1..5: butun bozor skaneri (faqat o'qish); ulanmasa qolgan tizim ishlayveradi
+            import httpx
+
+            from .zones.scanner import ZoneScanner
+            if sv.desk is not None:
+                zs = ZoneScanner(svc, sv.desk, httpx.Client(timeout=20), mt5=svc.mt5 if sys.platform == "win32" else None)
+                from .zones.trade import ZoneTrader
+                zt = ZoneTrader(sv, zs)
+                zs.after_pass = zt.on_pass  # DIR-1 vazifasi: aktiv zonadan zdelka (AUTO + DEMO + barcha himoya)
+                web.zone_trader = zt
+                jobs.append(zs.run())
+        except Exception:  # noqa: BLE001
+            log.exception("Zona skaneri ulanmadi")
+
+        async def _run_all() -> None:
+            await asyncio.gather(*jobs)
+        return asyncio.create_task(_run_all(), name="trading-tadqiqot")
     except Exception:  # noqa: BLE001
         log.exception("Trading tadqiqoti ishga tushmadi")
         return None

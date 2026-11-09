@@ -145,14 +145,27 @@ class TradingScheduler:
     # ------------------------------------------------------------------ signallar (V22)
     async def _signals(self, now: datetime) -> None:
         sv = self.signals
-        if sv is None or sv.mode == "off":
+        if sv is None:
+            return
+        cfg = self.settings.data.setdefault("signals", {})
+        if cfg.get("test_pending"):  # bir martalik: tugmalarni sinash uchun TEST signal (statistikaga kirmaydi)
+            cfg["test_pending"] = False
+            self.settings.save()
+            self._event("trading_signals", "Bir martalik TEST signal yuborilmoqda")
+            try:
+                await self.notify_owner("🧪 " + await sv.send_test())
+            except Exception:  # noqa: BLE001 — jimgina yutilmaydi: logga yoziladi
+                log.exception("TEST signal yuborilmadi")
+        if sv.mode == "off":
             return
         if (now - self._last_signals).total_seconds() < int((self.settings.get("signals") or {}).get("scan_sec", 900)):
             return
         self._last_signals = now
         try:
             res = await sv.scan_once()
+            self._event("scan_funnel", None, **{k: v for k, v in res.items() if k != "errors"}, n_errors=len(res["errors"]))  # har skan jurnalga (jim skanlar ham)
             await sv.track()
+            await sv.manage(now)  # V28: guruhlarni boshqarish va aylanma o'chirgich
             if res["sent"] or res["dry"] or res["errors"]:
                 self._event("trading_signals", f"Signal skaneri ({sv.mode}): " + ", ".join(
                     f"{k}={v}" for k, v in res.items() if k != "errors" and v), errors=res["errors"][:5])

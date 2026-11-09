@@ -353,6 +353,25 @@ class Counters:
 
 
 class PositionMonitor:
+    def _snapshot(self, open_now: list[dict], now) -> None:
+        """Veb-dashboard uchun: ochiq pozitsiyalarning joriy holati (har siklda almashtiriladi). Hisob balansi ham (o'qilsa)."""
+        try:
+            self.db.execute("DELETE FROM position_snapshot")
+            for p in open_now:
+                self.db.execute("INSERT OR REPLACE INTO position_snapshot(position_id, symbol, side, volume, price_open, sl, tp, profit, "
+                                "swap, magic, opened_at, ts) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+                                (p["ticket"], p["symbol"], p["side"], p["volume"], p["price_open"], p["sl"], p["tp"],
+                                 p.get("profit", 0.0), p.get("swap", 0.0), p["magic"], now_iso(p["time"]), now_iso(now)))
+            try:
+                bal = self.h.balance()
+            except Exception:  # noqa: BLE001 — balans o'qilmasa avvalgisi qoladi
+                bal = None
+            if bal is not None:
+                self.db.execute("INSERT INTO meta(key, value) VALUES('account_balance', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                                (json.dumps({"balance": bal, "ts": now_iso(now)}),))
+        except Exception:  # noqa: BLE001 — snapshot monitoringni to'xtatmasin
+            log.exception("pozitsiya snapshoti")
+
     def __init__(self, svc, history, queue: NotificationQueue, candles_fn, currency_fn=lambda: "USD",
                  analysis_path: Path | None = None, journal=None, contract_fn=lambda sym: None):
         self.svc = svc
@@ -421,6 +440,7 @@ class PositionMonitor:
         first = self._first
         self._first = False
         seen = {p["ticket"] for p in open_now}
+        self._snapshot(open_now, now)
         # 1. ochiq pozitsiyalar: yangi yoki SL/TP o'zgargan
         for p in open_now:
             row = self._row(p["ticket"])

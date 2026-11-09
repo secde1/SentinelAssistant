@@ -55,6 +55,9 @@ HELP = """IT-agent buyruqlari:
 • /trading — trading tadqiqoti (paper trading) holati.   • /trading_tahlil [SYMBOL TF] — hozir tahlil.
 • /trading_hisobot — bugungi hisobot.   • /trading_guruh <chat_id> — nashr guruhini tasdiqlash (_ochir — uzish).
 • /trading_faollashtir <STRATEGIYA> <versiya> — eksperimentdan o'tgan versiyani faollashtirish.
+• /trading_mode analysis|confirm|auto — savdo rejimi.   • /trading_stop — AUTO ni o'chirish.   • /trading_flat — o'zimiz ochgan
+  demo pozitsiyalarni yopish (tasdiq bilan).
+• /tun — tungi tadqiqot holati (/tun on|off).   • /tun_hisobot — hozirgi holat fayllari (Excel + Word).
 Tasdiq so'rovlariga "ha" yoki "yo'q" (yoki tugmalar). Javob bo'lmasa — amal bajarilmaydi."""
 
 
@@ -83,6 +86,7 @@ class TelegramBot:
         self.studio = None  # StudioStore — app.py da o'rnatiladi (cfg.reels_enabled bo'lsa)
         self.trading = None  # TradingService — app.py da (TRADING_ENABLED=1 bo'lsa)
         self.signals = None  # SignalService (V22) — app.py da
+        self.nightly = None  # NightIdeas (V26) — app.py da
         self.trading_scheduler = None
         self._reel_replies: dict[int, tuple[str, str]] = {}  # xabar id -> (rev|rej|time, reel id)
         self.chat_id = cfg.allowed_chat_id
@@ -370,7 +374,12 @@ class TelegramBot:
         cmd, _, rest = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
         rest = rest.strip()
-        if cmd in ("/start", "/help"):
+        if cmd == "/start" and rest.lower().startswith(("ha_", "yoq_")):
+            # eski skanerning URL tugmasi (t.me/...?start=ha_SYMBOL_SIDE): u zdelka ochmaydi — buni aniq aytamiz
+            await self.send_text("ℹ️ Bu ESKI tugma (URL turida), u zdelka ochmaydi va hech narsa o'zgarmadi. Yangi signallar "
+                                 "'SENTINEL | STRONG SIGNAL' ko'rinishida ✅ HA / ❌ YO'Q tugmalari bilan keladi — o'shalarni "
+                                 "bosing. Hozir kuchli signal bo'lmasa, xabar kelmaydi.")
+        elif cmd in ("/start", "/help"):
             await self.send_text(HELP)
         elif cmd == "/status":
             waits = self.pending.all()
@@ -403,6 +412,8 @@ class TelegramBot:
             await self._reels_command(cmd, rest)
         elif cmd.startswith("/trading"):
             await self._trading_command(cmd, rest)
+        elif cmd.startswith("/tun"):
+            await self._night_command(cmd, rest)
         elif cmd in ("/limit", "/xarajat"):
             runner = self.tasks.runner
             blocked = runner.unavailable_reason()
@@ -427,6 +438,28 @@ class TelegramBot:
         elif new in ("left", "kicked") and self.trading is not None and \
                 self.trading.settings.group_chat_id == chat.get("id"):
             await self.send_text(f"⚠️ Bot trading guruhidan chiqarildi ({chat.get('title')}). Nashr to'xtadi.")
+
+    async def _night_command(self, cmd: str, rest: str) -> None:
+        """/tun — holat; /tun on|off — yoqish/o'chirish; /tun_hisobot — hozirgi tun hisobotini (Excel + Word) yuborish."""
+        nt = self.nightly
+        if nt is None:
+            await self.send_text("Tungi tadqiqot ishga tushmagan.")
+        elif cmd == "/tun_hisobot":
+            night = nt.night_now()
+            xlsx, docx = await asyncio.to_thread(self._render_night, nt, night)
+            await self.send_file(xlsx, f"Tungi tadqiqot {night} (hozirgi holat; yakuniy hisobot 05:00 da)")
+            await self.send_file(docx, "Word varianti")
+        elif cmd == "/tun" and rest.strip().lower() in ("on", "off"):
+            nt.set_enabled(rest.strip().lower() == "on")
+            self.journal.event("night_ideas", f"Tungi tadqiqot: {rest.strip().lower()}")
+            await self.send_text(nt.status_text())
+        else:
+            await self.send_text(nt.status_text() + "\n/tun on|off — yoqish/o'chirish, /tun_hisobot — hozirgi holat fayllari.")
+
+    @staticmethod
+    def _render_night(nt, night: str):
+        from .nightly import render_files
+        return render_files(nt.store, night, nt.root / night, "oraliq holat (yakuniy emas)")
 
     async def _trading_command(self, cmd: str, rest: str) -> None:
         svc, sch = self.trading, self.trading_scheduler
@@ -492,6 +525,39 @@ class TelegramBot:
         elif cmd == "/trading_signal_test":
             sv = self.signals
             await self.send_text(await sv.send_test(rest.strip() or None) if sv else "Signal tizimi ishga tushmagan.")
+        elif cmd == "/trading_mode":
+            sv = self.signals
+            mode = rest.strip().lower()
+            cfg = svc.settings.data.setdefault("signals", {})
+            if sv is None:
+                await self.send_text("Signal tizimi ishga tushmagan.")
+            elif mode not in ("analysis", "confirm", "auto"):
+                await self.send_text(f"Rejim: signal {cfg.get('mode')}, savdo {cfg.get('trade_mode', 'confirm')} (demo_orders "
+                                     f"{cfg.get('demo_orders')}, sizing {cfg.get('sizing')}).\n/trading_mode analysis (faqat kuzatish) | "
+                                     "confirm (HA tugmasi) | auto (o'zi ochadi, faqat DEMO)")
+            elif mode == "auto" and not (sv.demo_enabled and cfg.get("sizing") == "risk"):
+                await self.send_text("AUTO yoqilmadi: demo_orders yoqilgan va sizing=risk bo'lishi kerak (1% risk, 2 pozitsiya).")
+            else:
+                cfg["mode"] = "dry" if mode == "analysis" else "live"
+                sv.set_trade_mode("auto" if mode == "auto" else "confirm", "egasi buyrug'i")
+                self.journal.event("trading_signals", f"/trading_mode {mode}", mode=mode)
+                await self.send_text({"analysis": "ANALYSIS: faqat kuzatish, guruhga/chatga signal yuborilmaydi.",
+                                      "confirm": "CONFIRMATION: signal tugma bilan tasdiqlanadi.",
+                                      "auto": "AUTO yoqildi (faqat DEMO): kuchli signalda o'zi 2 pozitsiya ochadi; o'chirgich: ketma-ket "
+                                              "3 zarar yoki 10% pasayish. To'xtatish: /trading_stop."}[mode])
+        elif cmd == "/trading_stop":
+            if self.signals is None:
+                await self.send_text("Signal tizimi ishga tushmagan.")
+            else:
+                self.signals.set_trade_mode("confirm", "egasi to'xtatdi")
+                await self.send_text("AUTO to'xtatildi: rejim CONFIRMATION. Ochiq pozitsiyalar joyida (yopish: /trading_flat).")
+        elif cmd == "/trading_flat":
+            sv = self.signals
+            if sv is None or sv.trader is None:
+                await self.send_text("MT5 demo savdo ulanmagan.")
+            elif await self.request_approval("FLAT", "Barcha SENTINAL (o'zimiz ochgan) MT5 DEMO pozitsiyalarini yopaymi?"):
+                res = await asyncio.to_thread(sv.flat_all)
+                await self.send_text("Yopish natijasi:\n" + ("\n".join(res) or "ochiq pozitsiya yo'q"))
         elif cmd == "/trading_signallar":
             sv = self.signals
             if sv is None:

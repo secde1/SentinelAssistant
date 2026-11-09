@@ -112,6 +112,14 @@ class MT5History:
             info = self.c.mt5.symbol_info(symbol)
             return float(info.trade_contract_size) if info is not None else None
 
+    def balance(self) -> float:
+        with _LOCK:
+            self.c.connect()
+            ai = self.c.mt5.account_info()
+            if ai is None:
+                raise DataUnavailable("MT5 hisob ma'lumoti o'qilmadi")
+            return float(ai.balance)
+
     def currency(self) -> str:
         with _LOCK:
             self.c.connect()

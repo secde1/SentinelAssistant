@@ -104,6 +104,33 @@ CREATE TABLE IF NOT EXISTS notifications (
 CREATE TABLE IF NOT EXISTS live_trades (
   position_id INTEGER PRIMARY KEY, strategy TEXT, symbol TEXT, direction TEXT, opened_at TEXT, closed_at TEXT, net REAL,
   r_multiple REAL, reason TEXT, source TEXT);
+CREATE TABLE IF NOT EXISTS position_snapshot (
+  position_id INTEGER PRIMARY KEY, symbol TEXT, side TEXT, volume REAL, price_open REAL, sl REAL, tp REAL, profit REAL, swap REAL,
+  magic INTEGER, opened_at TEXT, ts TEXT);
+CREATE TABLE IF NOT EXISTS scan_log (
+  id INTEGER PRIMARY KEY, ts TEXT NOT NULL, symbol TEXT NOT NULL, stage TEXT NOT NULL, strategy TEXT, outcome TEXT NOT NULL, reason TEXT);
+CREATE INDEX IF NOT EXISTS idx_scan_log_ts ON scan_log(ts);
+CREATE TABLE IF NOT EXISTS zones (
+  id TEXT PRIMARY KEY, symbol TEXT NOT NULL, source TEXT, detector TEXT, kind TEXT, tf TEXT, low REAL, high REAL, strength REAL,
+  note TEXT, status TEXT, dist_atr REAL, price REAL, first_seen TEXT, last_seen TEXT, announced_at TEXT, watch INTEGER DEFAULT 0, atr REAL);
+CREATE INDEX IF NOT EXISTS idx_zones_sym ON zones(symbol, status);
+CREATE TABLE IF NOT EXISTS staff_activity (role TEXT PRIMARY KEY, task TEXT, ts TEXT, counters TEXT);
+CREATE TABLE IF NOT EXISTS staff_messages (
+  id INTEGER PRIMARY KEY, ts TEXT NOT NULL, role TEXT NOT NULL, kind TEXT NOT NULL, text TEXT NOT NULL, ref TEXT);
+CREATE INDEX IF NOT EXISTS ix_staff_messages_ref ON staff_messages(ref);
+CREATE TABLE IF NOT EXISTS staff_decisions (
+  id INTEGER PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT, approve INTEGER, votes TEXT, reason TEXT);
+CREATE TABLE IF NOT EXISTS control_commands (
+  id INTEGER PRIMARY KEY, ts TEXT NOT NULL, cmd TEXT NOT NULL, arg TEXT, source TEXT, status TEXT NOT NULL,
+  result TEXT, done_at TEXT);
+CREATE TABLE IF NOT EXISTS demo_groups (
+  signal_id TEXT PRIMARY KEY, symbol TEXT, side TEXT, tickets TEXT, legs TEXT, sl REAL, risk_money REAL, risk_actual REAL,
+  mode TEXT, opened_at TEXT, closed_at TEXT, status TEXT NOT NULL, note TEXT);
+CREATE TABLE IF NOT EXISTS execution_audit (
+  id INTEGER PRIMARY KEY, ts TEXT NOT NULL, signal_id TEXT NOT NULL, symbol TEXT, origin TEXT, debate_result TEXT,
+  risk_result TEXT, decision TEXT NOT NULL, stage TEXT NOT NULL, reason TEXT, mt5_request TEXT, mt5_retcode INTEGER, detail TEXT);
+CREATE INDEX IF NOT EXISTS idx_exec_audit_sig ON execution_audit(signal_id);
+CREATE INDEX IF NOT EXISTS idx_exec_audit_ts ON execution_audit(ts);
 CREATE TABLE IF NOT EXISTS signal_events (
   id INTEGER PRIMARY KEY, signal_id TEXT NOT NULL, ts TEXT NOT NULL, kind TEXT NOT NULL, detail TEXT);
 """
@@ -128,7 +155,24 @@ class TradingDB:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA foreign_keys=ON")
             self.conn.executescript(SCHEMA)
+            self._migrate()
             self.conn.commit()
+
+    def _migrate(self) -> None:
+        """V32: ustunlar qo'shiladi (mavjud ma'lumot o'chirilmaydi/o'zgartirilmaydi); paper_positions.dataset eski yozuvlar uchun
+        FAQAT dalilga ko'ra to'ldiriladi (idempotent: faqat NULL qatorlar)."""
+        def cols(t: str) -> set[str]:
+            return {r[1] for r in self.conn.execute(f"PRAGMA table_info({t})")}
+        for table, col in (("signals", "exec_status"), ("signals", "origin"), ("paper_positions", "dataset")):
+            if col not in cols(table):
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+        self.conn.execute(
+            "UPDATE paper_positions SET dataset = CASE "
+            "WHEN signal_id LIKE 'TST-%' THEN 'TEST' "
+            "WHEN EXISTS(SELECT 1 FROM signal_events e WHERE e.signal_id=paper_positions.signal_id AND e.kind='demo_refused') THEN 'COUNTERFACTUAL' "
+            "WHEN signal_id LIKE 'ZON-%' AND EXISTS(SELECT 1 FROM signal_events e WHERE e.signal_id=paper_positions.signal_id AND e.kind='auto_confirm') "
+            "AND NOT EXISTS(SELECT 1 FROM staff_decisions d WHERE d.kind='signal' AND d.ref=paper_positions.signal_id) THEN 'TEST' "
+            "ELSE 'EXECUTABLE' END WHERE dataset IS NULL")
 
     def close(self) -> None:
         with self._lock:

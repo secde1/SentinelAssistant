@@ -132,3 +132,36 @@ def test_start_message_warns_about_unexpected_stop(tmp_path):
     clean.end()
     clean.begin()
     assert app._start_message(cfg, auth, clean) is None
+
+
+def test_quota_warning_is_sent_once_per_window_not_on_every_task():
+    import asyncio
+    from types import SimpleNamespace
+
+    from agent.loop import AgentRunner, TaskStatus, _RunState
+
+    class Journal:
+        def event(self, *a, **k):
+            pass
+
+    sent = []
+
+    class Channel:
+        async def send(self, text):
+            sent.append(text)
+    runner = AgentRunner.__new__(AgentRunner)
+    runner.journal, runner.last_limits, runner._quota_warned = Journal(), "", set()
+    ctx = SimpleNamespace(task_id="T1")
+
+    def warn(rtype, resets, task):
+        info = SimpleNamespace(status="allowed_warning", raw={}, rate_limit_type=rtype, resets_at=resets)
+        ctx.task_id = task
+        asyncio.run(runner._on_rate_limit(info, _RunState(idle_limit=10), ctx, TaskStatus(), Channel()))
+    warn("seven_day", 1000, "T1")
+    warn("seven_day", 1000, "T2")  # yangi topshiriq, o'sha oyna — takror yozilmaydi
+    warn("seven_day", 1000, "T3")
+    assert len(sent) == 1 and "T1" in sent[0] and "limiti yaqin" in sent[0]
+    warn("five_hour", 500, "T4")  # boshqa limit turi — alohida oyna
+    assert len(sent) == 2
+    warn("seven_day", 2000, "T5")  # oyna yangilandi (limit tiklandi) — yana ogohlantiradi
+    assert len(sent) == 3

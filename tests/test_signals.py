@@ -288,8 +288,8 @@ def test_owner_in_wrong_chat_is_refused(tmp_path):
 
     async def go():
         sid = await sent_signal(svc, sv)
-        assert "guruhda" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, -100999)
-        assert "guruhda" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, OWNER)
+        assert "chatda" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, -100999)
+        assert "chatda" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, OWNER)
         assert row(svc, sid)["status"] == "SENT"
     run(go())
 
@@ -670,3 +670,227 @@ def test_send_test_uses_real_setup_marks_test_and_is_excluded_from_stats(tmp_pat
         # haqiqiy signal dublikat hisobida TEST ni e'tiborga olmaydi
         assert sv._duplicate(cand(svc), svc.clock()) is None
     run(go())
+
+
+def test_scheduler_sends_one_shot_test_signal_even_in_dry_mode(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from agent.trading.publish import Publisher
+    from agent.trading.scheduler import TradingScheduler
+    svc, sv, tg = make_signal_service(tmp_path, mode="dry")
+    notes = []
+
+    async def notify(text):
+        notes.append(text)
+    sch = TradingScheduler(svc, Publisher(svc.db, svc.settings, lambda *a: None, clock=svc.clock), notify)
+    sch.signals = sv
+    monkeypatch.setattr(sv, "scan_symbol", lambda s: cand(svc, tier="WATCH", score=6))
+    svc.settings.data["signals"]["test_pending"] = True
+
+    async def go():
+        await sch._signals(NOW)
+        assert len(tg.sent) == 1 and tg.sent[0]["text"].startswith("🧪 TEST") and tg.sent[0]["markup"]
+        assert svc.settings.data["signals"]["test_pending"] is False and "Test signal yuborildi" in notes[0]
+        await sch._signals(NOW + timedelta(seconds=30))
+        assert len(tg.sent) == 1  # bayroq tozalangan: takror yuborilmaydi; dry rejimda oddiy skaner ham yubormaydi
+    run(go())
+
+
+def test_send_test_survives_unexpected_error_in_one_symbol(tmp_path, monkeypatch):
+    svc, sv, tg = make_signal_service(tmp_path)
+    svc.settings.data["signals"]["universe"] = ["BTCUSDT", "BTCUSDT"]
+    calls = []
+
+    def flaky(sym):
+        calls.append(sym)
+        if len(calls) == 1:
+            raise ValueError("MT5 kutilmagan xato")
+        return cand(svc, tier="WATCH", score=5)
+    monkeypatch.setattr(sv, "scan_symbol", flaky)
+    assert "Test signal yuborildi" in run(sv.send_test())  # birinchi instrumentda xato bo'lsa ham ikkinchisidan yuboradi
+
+
+# ------------------------------------------------------------------------------------------------ HA -> MT5 DEMO zdelka
+class FakeTrader:
+    """DemoTrader o'rnini bosuvchi: haqiqiy MT5 yo'q."""
+
+    def __init__(self, result=None, positions=(), refuse=None):
+        self.calls, self._pos, self.refuse = [], list(positions), refuse
+        self.result = result or {"ok": True, "stage": "order_send", "retcode": 10009, "order": 777, "price": 100.5}
+        self.c = SimpleNamespace(resolve=lambda n: n + "m")
+
+    def positions(self):
+        return self._pos
+
+    def open(self, symbol, side, lot, sl, tp=None, dry_run=False):
+        from agent.trading.mt5_trade import TradeRefused
+        if self.refuse:
+            raise TradeRefused(self.refuse)
+        self.calls.append((symbol, side, lot, sl, tp))
+        return self.result
+
+
+class FakeHistory:
+    def __init__(self, loss=0.0, balance=10000.0):
+        self.loss, self._bal = loss, balance
+
+    def deals_between(self, a, b):
+        from agent.trading.mt5_history import Deal
+        if not self.loss:
+            return []
+        return [Deal(1, 0, 9, NOW, "BUY", "OUT", "SL", 4, "BTCUSDm", 0.01, 1.0, 0.0, 0.0, -self.loss, 0.0, 1, "")]
+
+    def open_positions(self):
+        return []
+
+    def balance(self):
+        return self._bal + (-self.loss if self.loss else 0.0)  # balans realized natijani o'z ichiga oladi
+
+
+def demo_service(tmp_path, trader, history=None, **cfg):
+    svc, sv, tg = make_signal_service(tmp_path)
+    svc.settings.data["signals"].update({"demo_orders": True, "demo_lot": 0.01, "daily_loss_pct": 5.0, **cfg})
+    sv.trader, sv.history = trader, history
+    return svc, sv, tg
+
+
+def test_mt5_symbol_name_mapping():
+    assert [sg.mt5_name(s) for s in ("BTCUSDT", "XAU/USD", "EUR/USD", "ETHUSDT", "XRPUSDT")] == \
+        ["BTCUSD", "XAUUSD", "EURUSD", "ETHUSD", "XRPUSD"]
+
+
+def test_ha_opens_demo_order_with_signal_levels_and_reports_it(tmp_path):
+    tr = FakeTrader()
+    svc, sv, tg = demo_service(tmp_path, tr, FakeHistory())
+
+    async def go():
+        sid = await sent_signal(svc, sv)
+        assert "MT5 DEMO hisobda zdelka" in tg.sent[0]["text"]  # xabar demo yoqilganini aytadi
+        ans = await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, GROUP)
+        r = row(svc, sid)
+        assert "MT5 DEMO zdelka ochildi" in ans
+        assert tr.calls == [("BTCUSD", "buy", 0.01, r["sl"], r["tp"])]  # signal darajalari, 0.01 lot
+        assert svc.db.one("SELECT status FROM paper_positions")["status"] == "PENDING"  # paper ham ochiladi
+        text = tg.edits[-1][2]
+        assert "paper pozitsiya + MT5 DEMO zdelka" in text and "order #777" in text
+        assert svc.db.one("SELECT COUNT(*) n FROM signal_events WHERE kind='demo_opened'")["n"] == 1
+    run(go())
+
+
+def test_reject_and_test_signals_never_open_demo_orders(tmp_path, monkeypatch):
+    tr = FakeTrader()
+    svc, sv, tg = demo_service(tmp_path, tr, FakeHistory())
+
+    async def go():
+        sid = await sent_signal(svc, sv)
+        await sv.handle_callback(f"sentinel:reject:{sid}", OWNER, GROUP)
+        monkeypatch.setattr(sv, "scan_symbol", lambda s: cand(svc, tier="WATCH", score=6))
+        await sv.send_test("BTCUSDT")
+        assert "MT5 DEMO hisobda zdelka" not in tg.sent[-1]["text"]  # TEST xabari demo haqida va'da bermaydi
+        await sv.handle_callback("sentinel:confirm:TST-20261109-0001", OWNER, GROUP)
+        assert tr.calls == []
+    run(go())
+
+
+def test_demo_disabled_or_missing_trader_keeps_paper_only(tmp_path):
+    for enabled, trader in ((False, FakeTrader()), (True, None)):
+        svc, sv, tg = make_signal_service(tmp_path / str(enabled))
+        svc.settings.data["signals"]["demo_orders"] = enabled
+        sv.trader = trader
+
+        async def go():
+            sid = await sent_signal(svc, sv)
+            assert "Faqat PAPER" in tg.sent[0]["text"]
+            ans = await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, GROUP)
+            assert ans == "Tasdiqlandi — PAPER pozitsiya ochildi"
+            if trader:
+                assert trader.calls == []
+        run(go())
+
+
+@pytest.mark.parametrize("trader,history,why", [
+    (FakeTrader(refuse="Hisob DEMO emas"), None, "Hisob DEMO emas"),
+    (FakeTrader(positions=[{"symbol": "BTCUSDm", "side": "buy"}]), None, "allaqachon ochiq"),
+    (FakeTrader(), FakeHistory(loss=600.0), "kunlik zarar chegarasi"),
+    (FakeTrader(result={"ok": False, "stage": "order_check", "retcode": 10017, "comment": "Trade disabled"}), None, "Trade disabled")])
+def test_demo_refusals_are_reported_and_never_hidden(tmp_path, trader, history, why):
+    svc, sv, tg = demo_service(tmp_path, trader, history)
+
+    async def go():
+        sid = await sent_signal(svc, sv)
+        ans = await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, GROUP)
+        assert "MT5 demo ochilmadi" in ans and why in ans
+        assert "MT5 DEMO zdelka OCHILMADI" in tg.edits[-1][2] and why in tg.edits[-1][2]
+        # V32: rad etilgan ijro "CONFIRMED" EMAS; kuzatuv paper alohida (COUNTERFACTUAL) to'plamda
+        assert row(svc, sid)["status"] == "REFUSED" and row(svc, sid)["exec_status"] == "EXECUTION_REFUSED"
+        assert svc.db.one("SELECT COUNT(*) n, MIN(dataset) d FROM paper_positions") == {"n": 1, "d": "COUNTERFACTUAL"}
+        assert svc.db.one("SELECT COUNT(*) n FROM signal_events WHERE kind='demo_refused'")["n"] == 1
+    run(go())
+
+
+def test_opposite_direction_position_does_not_block_and_limit_below_threshold_passes(tmp_path):
+    tr = FakeTrader(positions=[{"symbol": "BTCUSDm", "side": "sell"}])
+    svc, sv, tg = demo_service(tmp_path, tr, FakeHistory(loss=400.0))  # 4% < 5%
+
+    async def go():
+        sid = await sent_signal(svc, sv)
+        assert "MT5 DEMO zdelka ochildi" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, GROUP)
+    run(go())
+
+
+# ------------------------------------------------------------------------------------------------ signal chati: shaxsiy | guruh
+def test_signals_can_go_to_private_chat_and_only_that_chat_can_confirm(tmp_path):
+    svc, sv, tg = make_signal_service(tmp_path)
+    svc.settings.data["private_chat_id"] = OWNER
+    svc.settings.data["signals"]["target"] = "private"
+
+    async def go():
+        sid = await sent_signal(svc, sv)
+        assert tg.sent[0]["chat"] == OWNER and row(svc, sid)["chat_id"] == OWNER  # guruhga ketmaydi
+        assert "chatda" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, GROUP)  # boshqa chatdan bosib bo'lmaydi
+        assert "Faqat egasi" in await sv.handle_callback(f"sentinel:confirm:{sid}", STRANGER, OWNER)
+        assert "PAPER" in await sv.handle_callback(f"sentinel:confirm:{sid}", OWNER, OWNER)
+    run(go())
+
+
+def test_private_target_without_private_chat_sends_nothing(tmp_path):
+    svc, sv, tg = make_signal_service(tmp_path)
+    svc.settings.data["signals"]["target"] = "private"
+    svc.settings.data["private_chat_id"] = None
+
+    async def go():
+        c = cand(svc)
+        s = sv.store(c, svc.clock(), "NEW")
+        assert not await sv.publish(s["signal_id"], c) and not tg.sent  # guruhga yo'naltirilmaydi
+        assert "ulanmagan" in await sv.send_test()
+    run(go())
+
+
+def test_start_with_old_url_button_payload_explains_instead_of_showing_help():
+    from agent.bot import HELP, TelegramBot
+    sent = []
+
+    async def send_text(t, *a, **k):
+        sent.append(t)
+    bot = TelegramBot.__new__(TelegramBot)
+    bot.send_text = send_text
+    run(bot._on_command({}, "/start ha_ADAUSDT_SELL"))
+    run(bot._on_command({}, "/start yoq_LINKUSDT_SELL"))
+    assert all("ESKI tugma" in t and "zdelka ochmaydi" in t for t in sent) and len(sent) == 2
+    run(bot._on_command({}, "/start"))
+    assert sent[-1] == HELP  # oddiy /start o'zgarmagan
+
+
+def test_legacy_scanner_script_no_longer_sends_url_buttons(capsys):
+    import runpy
+    import sys
+    from pathlib import Path
+    path = Path(__file__).resolve().parents[1] / "data" / "skript" / "auto_scan_alert.py"
+    src = path.read_text(encoding="utf-8")
+    assert "LEGACY_URL_BUTTONS_ENABLED = False" in src
+    old_argv, sys.argv = sys.argv, [str(path)]
+    try:
+        runpy.run_path(str(path), run_name="__main__")  # tarmoqqa chiqmaydi va hech narsa yubormaydi
+    finally:
+        sys.argv = old_argv
+    assert "eski skaner o'chiq" in capsys.readouterr().out

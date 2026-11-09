@@ -33,22 +33,46 @@ export function compact(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/** Hamma vaqt Toshkent vaqtida (Asia/Tashkent, UTC+5): baza UTC saqlaydi, brauzer qaerda bo'lmasin bir xil ko'rsatiladi. */
+export const TZ = "Asia/Tashkent";
+const dtf = new Intl.DateTimeFormat("en-GB", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+
+function tk(iso: string | number | null | undefined): { y: string; mo: string; d: string; h: string; mi: string } | null {
+  if (iso === null || iso === undefined || iso === "") return null;
+  const d = new Date(typeof iso === "number" ? iso * 1000 : iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const p = Object.fromEntries(dtf.formatToParts(d).map((x) => [x.type, x.value]));
+  return { y: p.year, mo: p.month, d: p.day, h: p.hour, mi: p.minute };
+}
+
 export function dateTime(iso: string | null | undefined): string {
   if (!iso) return UNKNOWN;
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  const p = (x: number) => String(x).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  const t = tk(iso);
+  return t ? `${t.y}-${t.mo}-${t.d} ${t.h}:${t.mi}` : iso;
 }
 
 export function dateOnly(iso: string | null | undefined): string {
   if (!iso) return UNKNOWN;
-  return iso.slice(0, 10);
+  const t = tk(iso);
+  return t ? `${t.y}-${t.mo}-${t.d}` : iso;
 }
 
 export function timeOnly(iso: string | null | undefined): string {
   if (!iso) return "";
-  return iso.slice(11, 16);
+  const t = tk(iso);
+  return t ? `${t.h}:${t.mi}` : iso;
+}
+
+/** Grafik vaqt belgisi (UNIX soniya): kunlik shamlar uchun sana, qolganlari uchun vaqt — Toshkent bo'yicha. */
+export function tkAxis(sec: number, withDate: boolean): string {
+  const t = tk(sec);
+  if (!t) return "";
+  return withDate ? `${t.d}.${t.mo}` : `${t.h}:${t.mi}`;
+}
+
+export function tkFull(sec: number): string {
+  const t = tk(sec);
+  return t ? `${t.d}.${t.mo}.${t.y} ${t.h}:${t.mi}` : "";
 }
 
 export function ago(iso: string | null | undefined): string {
