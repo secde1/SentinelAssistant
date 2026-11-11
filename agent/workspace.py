@@ -10,8 +10,6 @@ SUBDIRS = ("xotira", "skill", "jurnal", "maxfiy", "zaxira", "ish", "skript")
 # GitHubga faqat skill/, xotira/, skript/ tushadi.
 GITIGNORE = """\
 .env
-trading_memory/database/
-trading_memory/logs/
 maxfiy/
 zaxira/
 jurnal/

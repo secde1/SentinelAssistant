@@ -75,7 +75,6 @@ class Config:
     reels_brand: str = ""
     azure_speech_key: str = ""
     azure_speech_region: str = ""
-    trading_enabled: bool = False
     twelvedata_api_key: str = ""
 
     @classmethod
@@ -131,7 +130,6 @@ class Config:
             reels_brand=(e("REELS_BRAND") or "").strip(),
             azure_speech_key=(e("AZURE_SPEECH_KEY") or "").strip(),
             azure_speech_region=(e("AZURE_SPEECH_REGION") or "").strip(),
-            trading_enabled=_bool(e("TRADING_ENABLED"), False),
             twelvedata_api_key=(e("TWELVEDATA_API_KEY") or "").strip(),
         )
 

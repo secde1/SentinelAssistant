@@ -57,7 +57,6 @@ class ToolContext:
     artifact_checks: dict = field(default_factory=dict)  # yo'l -> {sha, ok, verified, summary, forced}
     delivered: dict = field(default_factory=dict)  # yo'l -> yuborilgan versiya sha256
     validation_requirements: dict = field(default_factory=dict)
-    chart: dict = field(default_factory=dict)  # V17 TradingView: {"state": confirmed|unverified|needs_setup|invalid}
     _out_counter: int = 0
 
     @property

@@ -203,7 +203,7 @@ _TRADE_REASON = ("Real savdo buyrug'i (order): broker yoki birjaga haqiqiy buyur
 _MT5_DIRECT = _rx(r"\bimport\s+MetaTrader5\b|\bfrom\s+MetaTrader5\s+import\b|\bStart-Process\b[^|;\n]*terminal64"
                   r"|&\s*['\"]?[^'\"\n|;]*terminal64\.exe")
 _MT5_REASON = ("MT5 terminaliga to'g'ridan-to'g'ri murojaat: initialize() yopiq terminalni o'zi ishga tushiradi (Exness "
-               "terminali REAL hisobda). Faqat o'qish uchun trading_mt5_status tool'ini ishlating")
+               "terminali REAL hisobda). MT5 bilan ishlash bu agentning vazifasi emas (alohida SENTINEL Trading loyihasi)")
 
 
 def trading_risk(text: str) -> tuple[str, str, str] | None:

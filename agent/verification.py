@@ -35,7 +35,6 @@ class Facts:
     artifacts_unverified: tuple[str, ...] = field(default=())  # joriy versiyasi tekshirilmagan hujjatlar (nomlari)
     artifacts_failed: tuple[str, ...] = field(default=())  # tekshiruvdan o'tmagan (yoki majburan yuborilgan) hujjatlar
     followup_unapplied: bool = False  # follow-up faylni o'zgartirishni so'ragan, lekin fayl o'zgarmagan
-    chart_state: str | None = None  # TradingView: confirmed | unverified | needs_setup | invalid
 
 
 ALIASES = {"NEEDS_AUTHORIZATION": "NEEDS_AUTH"}  # V5 dagi to'liq nom
@@ -66,12 +65,6 @@ def decide(claimed: str | None, facts: Facts) -> tuple[str | None, str | None]:
         reasons.append(("PARTIAL", "so'ralgan o'zgarish faylga kiritilmadi"))
     if facts.artifacts_unverified:
         reasons.append(("PARTIAL", "fayl tekshirilmagan: " + ", ".join(facts.artifacts_unverified[:3])))
-    if facts.chart_state == "invalid":
-        reasons.append(("FAILED", "Pine Script tayyorlanmadi yoki tekshiruvdan o'tmadi"))
-    elif facts.chart_state == "needs_setup":
-        reasons.append(("NEEDS_SETUP", "TradingView integratsiyasi/qurilmasi tayyor emas"))
-    elif facts.chart_state == "unverified":
-        reasons.append(("PARTIAL", "TradingView grafigida annotatsiyalar tasdiqlanmagan"))
     if facts.run_code == "limit" and not reasons:
         reasons.append(("PARTIAL", "qadam yoki vaqt chegarasi tugadi"))
     forced = None

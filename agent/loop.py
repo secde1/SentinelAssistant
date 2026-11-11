@@ -239,9 +239,6 @@ class AgentRunner:
         if af.undelivered and not af.failed:
             items.append(f"{af.names(af.undelivered)} Jamshidga yuborilmadi — agar bu uning uchun natija bo'lsa, "
                          "notify_owner(file_path=...) bilan yubor")
-        if (ctx.chart or {}).get("state") == "unverified":
-            items.append("TradingView grafigi TASDIQLANMAGAN — 'chizildi/qo'shildi' dema: hisobotda PARTIAL, Pine fayl, "
-                         "o'rnatish qadamlari; egasi qo'shgach tradingview_verify")
         if (ctx.successful_calls >= 3 and not ctx.skill_written and not matched_skill
                 and ctx.last_verify_ok is not False and ctx.consecutive_failures == 0):
             items.append("bu ish uchun skill yo'q — write_skill bilan HAQIQATAN ishlagan buyruqlar asosida skill yoz")
@@ -261,8 +258,7 @@ class AgentRunner:
                                    verify_failed=ctx.last_verify_ok is False, run_code=code,
                                    artifacts_unverified=tuple(Path(x).name for x in af.unverified),
                                    artifacts_failed=tuple(Path(x).name for x in af.failed),
-                                   followup_unapplied=af.followup_unapplied,
-                                   chart_state=(ctx.chart or {}).get("state"))
+                                   followup_unapplied=af.followup_unapplied)
         text, final_status = verification.apply(self.redactor.redact(text or ""), facts)
         file = None
         lines = [ln for ln in text.splitlines() if ln.strip()]

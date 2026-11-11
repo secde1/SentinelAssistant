@@ -40,10 +40,10 @@ DEFAULTS = {
 KINDS = {
     "github": ("GitHub", "GitHub'da yangi va mashhur loyihalarni top: IT-administratorlik avtomatlashtirishi (Windows/AD, "
                "Mikrotik, UniFi, Zabbix), shaxsiy yordamchi/Telegram agentlar, agent xotirasi va skill tizimlari, "
-               "backtesting va trading tadqiqoti, xavfsizlik. README, litsenziya va oxirgi yangilanishni o'qi (WebFetch). "
+               "xavfsizlik. README, litsenziya va oxirgi yangilanishni o'qi (WebFetch). "
                "Kodni YUKLAB OLMA va ishga TUSHIRMA."),
     "internet": ("Internet", "Veb'dan yangi maqola, hujjat va yangiliklarni top: AI agent arxitekturalari, avtomatlashtirish "
-                 "usullari, xavfsizlik amaliyoti, trading tadqiqot metodikasi (look-ahead, overfitting, backtest xatolari). "
+                 "usullari, xavfsizlik amaliyoti. "
                  "Birlamchi manbalarni afzal ko'r."),
     "youtube": ("YouTube", "YouTube'dan shu mavzulardagi yangi videolarni WebSearch bilan top. Video KO'RILMAYDI: faqat "
                 "sarlavha, kanal, tavsif va ochiq sahifa matnidan foydalan. Ko'rilmaganini summary'da aytib o't. "
@@ -89,8 +89,13 @@ def save_config(root: Path, cfg: dict) -> None:
 
 
 def tz_of(cfg: dict):
-    from .trading.settings import tz_from_name
-    return tz_from_name(cfg.get("timezone") or "Asia/Tashkent")
+    from datetime import timezone as _tz
+    from zoneinfo import ZoneInfo
+    name = cfg.get("timezone") or "Asia/Tashkent"
+    try:
+        return ZoneInfo(name)
+    except Exception:  # noqa: BLE001 — tzdata yo'q bo'lsa
+        return _tz(timedelta(hours=5), "UTC+05:00") if name == "Asia/Tashkent" else _tz.utc
 
 
 def night_of(now: datetime, tz) -> str:

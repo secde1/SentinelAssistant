@@ -12,7 +12,7 @@ import time
 
 from .. import gate
 from ..inventory import PlaceholderError
-from . import artifacts, files, http_api, ideas, knowledge, owner, powershell, reels, ssh, trading, tradingview, verify
+from . import artifacts, files, http_api, ideas, knowledge, owner, powershell, reels, ssh, verify
 from .base import ToolContext, ToolResult, ToolSpec, validate_args
 
 _INJECTION = re.compile(
@@ -91,36 +91,12 @@ def build_specs() -> list[ToolSpec]:
                  "yasaydi, sifatini tekshiradi va egasiga Telegram'da tasdiq tugmalari bilan yuboradi. Joylamaydi — "
                  "joylash faqat egasi tasdiqlagan versiya bilan (2-bosqich).", reels.RENDER_SCHEMA, reels.reel_render,
                  reels.classify, lambda a: str((a.get("script") or {}).get("title", ""))[:200]),
-        ToolSpec("trading_research_source", trading.SOURCE_DESCRIPTION, trading.SOURCE_SCHEMA, trading.research_source,
-                 trading.classify_internal, lambda a: str(a.get("url", ""))[:300], counts_as_work=False),
-        ToolSpec("trading_report", trading.REPORT_DESCRIPTION, trading.REPORT_SCHEMA, trading.report,
-                 trading.classify_read, lambda a: "", counts_as_work=False),
-        ToolSpec("trading_track_manual", trading.MANUAL_DESCRIPTION, trading.MANUAL_SCHEMA, trading.track_manual,
-                 trading.classify_internal, lambda a: f"{a.get('symbol')} {a.get('direction')} {a.get('entry')}"[:300]),
-        ToolSpec("trading_mt5_status", trading.MT5_DESCRIPTION, trading.MT5_SCHEMA, trading.mt5_status,
-                 trading.classify_read, lambda a: f"{a.get('symbol', 'EUR/USD')} {a.get('timeframe', '1h')}"[:300],
-                 counts_as_work=False),
-        ToolSpec("trading_mt5_order", trading.MT5_ORDER_DESCRIPTION, trading.MT5_ORDER_SCHEMA, trading.mt5_order,
-                 trading.classify_mt5_order,
-                 lambda a: f"{a.get('action')} {a.get('symbol', '')} {a.get('side', '')} {a.get('lot', '')}"[:300],
-                 counts_as_work=False),
         ToolSpec("ideas_source", ideas.SOURCE_DESCRIPTION, ideas.SOURCE_SCHEMA, ideas.ideas_source, ideas.classify_internal,
                  lambda a: f"{a.get('kind')} {a.get('url', '')}"[:300], counts_as_work=False),
         ToolSpec("ideas_plan", ideas.PLAN_DESCRIPTION, ideas.PLAN_SCHEMA, ideas.ideas_plan, ideas.classify_internal,
                  lambda a: str(a.get("title", ""))[:300], counts_as_work=False),
         ToolSpec("ideas_list", ideas.LIST_DESCRIPTION, ideas.LIST_SCHEMA, ideas.ideas_list, ideas.classify_internal,
                  lambda a: "bugungi topilmalar", counts_as_work=False),
-        ToolSpec("trading_experiment", trading.EXPERIMENT_DESCRIPTION, trading.EXPERIMENT_SCHEMA, trading.experiment,
-                 trading.classify_internal, lambda a: f"{a.get('strategy_id')} {a.get('params')}"[:300]),
-        ToolSpec("tradingview_environment", tradingview.ENV_DESCRIPTION, tradingview.ENV_SCHEMA,
-                 tradingview.environment_tool, tradingview.classify_read, lambda a: str(a.get("device", "")),
-                 counts_as_work=False),
-        ToolSpec("tradingview_prepare", tradingview.PREPARE_DESCRIPTION, tradingview.PREPARE_SCHEMA, tradingview.prepare,
-                 tradingview.classify_internal,
-                 lambda a: f"{a.get('analysis_id') or a.get('id')} {a.get('device', '')}"[:300]),
-        ToolSpec("tradingview_verify", tradingview.VERIFY_DESCRIPTION, tradingview.VERIFY_SCHEMA, tradingview.verify,
-                 tradingview.classify_read, lambda a: f"{a.get('scenario_id')} {a.get('device', '')}"[:300],
-                 counts_as_work=False),
         ToolSpec("reel_list", "Instagram Reels ro'yxati va holati (mavzular takrorlanmasligi, rad etilganlar sababi).",
                  reels.LIST_SCHEMA, reels.reel_list, reels.classify, lambda a: str(a.get("state") or ""),
                  counts_as_work=False),

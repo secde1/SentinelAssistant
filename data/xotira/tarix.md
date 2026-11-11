@@ -479,42 +479,6 @@
 - Saboq: Namuna PDF bo'lsa, avval OCR bilan tuzilmasini olish kerak edi. 49-raqam o'chirish ro'yxatida ham borligini ogohlantirish kerak
 - Topshiriq: T1102-150923
 
-## 2026-11-02 17:36 | MetaTrader 5 ni D diskka o'rnatish (ноутбук)
-- Kategoriya: dastur-ornatish
-- Belgi: Jamshid noutbukka MetaTrader D diskka o'rnatishni so'radi; D:\MT5 yaratilmadi
-- Sabab: mt5setup.exe /auto /path: tinch rejimda ishlamadi — GUI ustasi ochilib "Dalee" kutdi; ustalar yuqori huquqda, agent (admin emas) ularni yopa olmadi (Access denied)
-- Tuzatish: Rasmiy installer yuklandi (MetaQuotes imzosi Valid) ish/mt5dl ga; 2 marta ishga tushirildi; taskkill/Stop-Process rad etildi. Jamshidga qo'lda o'rnatish yoki ustalarni yopib qayta urinish taklif qilindi
-- Natija: O'rnatilmadi: verify FAIL (terminal64.exe yo'q), 2 ta mt5setup ustasi ekranda ochiq turibdi. NEEDS_AUTH (tekshirilmagan)
-- Saboq: MT5 web-installer /auto tinch rejim emas; GUI kutadi. Keyingi safar avval foydalanuvchi ustalarni yopsin yoki qo'lda yo'l tanlasin; bitta urinishdan keyin ikkinchisini ishga tushirma — ustalar to'planib qoladi
-- Topshiriq: T1102-172902
-
-## 2026-11-02 17:53 | Exness MT5 va TradingView o'rnatish (ноутбук)
-- Kategoriya: dastur-ornatish
-- Belgi: Jamshid Exness va TradingView o'rnatishni so'radi
-- Sabab: Exness winget'da yo'q; rasmiy installer download.mql5.com/.../exness.technologies.ltd/mt5/exness5setup.exe (MetaQuotes imzosi Valid). /path: e'tiborga olinmadi
-- Tuzatish: exness5setup.exe /auto bir marta ishga tushirildi; TradingView: winget install TradingView.TradingViewDesktop
-- Natija: verify PASS: C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe bor va ishlayapti; TradingView 3.5.0.8375 winget ro'yxatida. D diskka tushmadi (tasdiqlangan) (tasdiqlangan)
-- Saboq: exness5setup /auto ishlaydi (mt5setup'dan farqli), lekin /path: ni hisobga olmaydi va C ga tushadi. Hisob/login brokerda qo'lda ochiladi.
-- Topshiriq: T1102-174955
-
-## 2026-11-02 18:41 | TradingView Desktop ni ishga tushirib, oldingi planga chiqarish
-- Kategoriya: dastur-ornatish
-- Belgi: Jamshid o'rnatilgan TradingView ni ekran ustiga chiqarishni so'radi; jarayon ishlamayotgan edi
-- Sabab: TradingView MSIX/Appx ilova (C:\Program Files\WindowsApps), exe yo'li Get-ChildItem bilan o'qilmaydi (Access denied); ilova yopiq turgan edi
-- Tuzatish: AUMID Get-AppxPackage + Get-AppxPackageManifest dan olindi (TradingView.Desktop_n534cwy3pjxzj!TradingView.Desktop), explorer.exe shell:AppsFolder\AUMID bilan ishga tushirildi; user32 ShowWindow/SetWindowPos(topmost)/SetForegroundWindow bilan oyna oldinga chiqarildi
-- Natija: verify PASS: TradingView oynasi bor (sarlavha USDRUB_TOM), foreground=True, visible=True, minimized=False. Ekranni ko'zda tekshirmadim (tasdiqlangan) (tasdiqlangan)
-- Saboq: Appx ilovani yo'l bilan emas, shell:AppsFolder\AUMID bilan ishga tushirish kerak. Keyingi safar shu uchun skill yozish mumkin (2 marta takrorlansa).
-- Topshiriq: T1102-183947
-
-## 2026-11-02 19:22 | RTX TERON V9.5 (.ex5 robot) ichini statik o'qish
-- Kategoriya: fayl-tahlil
-- Belgi: Jamshid arxivdagi MT5 robot ichini ochib o'qishni so'radi
-- Sabab: .ex5 kompilyatsiya qilingan va shifrlangan; ASCII/UTF-16 qidiruvda ham o'qiladigan satr, URL yo'q. Rasmiy dekompilyator mavjud emas
-- Tuzatish: Arxiv ish/rtx_extract ga ochildi (ishga tushirilmadi), baytlar bo'yicha satr va URL qidirildi. Mazmun ochilmadi; .mq5 so'rash yoki demo terminalda sinash taklif qilindi
-- Natija: verify PASS: fayllar joyida, rtx_extract ichidan jarayon ishlamayapti. Robot mazmuni tekshirilmagan (PARTIAL) (tasdiqlangan)
-- Saboq: Yopiq .ex5 ni ichidan tahlil qilib bo'lmaydi; faqat xatti-harakatini izolyatsiyalangan demo muhitda kuzatish mumkin. Bunday so'rovda darrov shuni aytish kerak
-- Topshiriq: T1102-192122
-
 ## 2026-11-02 20:08 | srv-file01 ga kirish: WinRM parol hali rad etilmoqda
 - Kategoriya: winrm-auth
 - Belgi: Jamshid "fayl serverga kira olasanmi" deb so'radi; srv-file01 (192.168.5.5) ga ulanish sinaldi
@@ -524,22 +488,13 @@
 - Saboq: Bu 30.10 dagi holatning takrori: inventardagi parol hali noto'g'ri. Keyingi safar darrov bitta pywinrm NTLM sinovi qilib, rad bo'lsa birdaniga request_credentials taklif qilish kerak, ortiqcha urinishlarsiz
 - Topshiriq: T1102-200756
 
-## 2026-11-02 20:19 | noutbuk-2 (NB-XS-TEX02) га Exness MT5 ва TradingView ўрнатиш
-- Kategoriya: dastur-ornatish
-- Belgi: Jamshid иккинчи ноутбукка Exness, TradingView, MT5 ўрнатишни сўради
-- Sabab: Exness MT5 /auto билан масофадан ўрнатилди. TradingView — MSIX: winget масофавий сессияда Access denied, Add-AppxPackage ва Add-AppxProvisionedPackage 0x80073D19 (special profile deployment политикаси) ва 0x800706FD (домен ишончи) билан блокланди
-- Tuzatish: exness5setup.exe (MetaQuotes имзоси Valid) D:\inst_exness дан /auto; TradingView.msix (имзо Valid, SHA256 манифестга тенг) D:\inst_tv га юклаб қўйилди, ўрнатилмади
-- Natija: Exness: verify PASS (C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe). TradingView: ўрнатилмади, фойдаланувчи ўзи ноутбукда кириб Add-AppxPackage D:\inst_tv\TradingView.msix қилиши керак (PARTIAL) (tasdiqlangan)
-- Saboq: MSIX ни WinRM орқали ўрнатиб бўлмайди (профил йўқ). Бундай дастурни фойдаланувчи сессиясида ёки RDP орқали ўрнатиш керак; бир уринишдан кейин шуни таклиф қил
-- Topshiriq: T1102-201422
-
 ## 2026-11-03 13:33 | nb-xs-tex02 (192.168.41.159) ulanish diagnostikasi
 - Kategoriya: winrm-ulanish
 - Belgi: 13:04-13:06 da ping 3/3 yo'qolgan, TCP 5985 timeout edi
 - Sabab: Konfiguratsiya xatosi emas: IP to'g'ri, asosiy PC bir subnetda (192.168.41.58/22, Wi-Fi), ARP yozuvi bor (0c-9a-3c-7f-2c-09). Ehtimol ilgari ulanish vaqtincha uzilgan (uyqu/Wi-Fi). Hozir ping, TCP 5985, Test-WSMan va WinRM autentifikatsiya PASS. Eslatma: Ethernet 2 (192.168.60.159) va Wi-Fi ikkita default gateway bor (metrika 35 va 281), 8.8.8.8 DNS ba'zi interfeysda ustuvor bo'lsa .local nomi ochilmasligi mumkin (nslookup 8.8.8.8 orqali NXDOMAIN; ping esa nomni hal qildi).
 - Tuzatish: Hech narsa o'zgartirilmadi (faqat o'qish).
 - Natija: Hozir: ping IP 3/3 (2-3ms), ping nom 2/2 (4ms, 192.168.41.159), TCP 5985 IP va nom PASS, Test-WSMan OK, hostname NB-XS-TEX02 qaytdi. (o'zgartirish bo'lmagan)
-- Saboq: Uzilishda avval ARP/ping qayta tekshir; ikki gateway/DNS 8.8.8.8 ni kuzat. TradingView MSIX esa WinRM orqali o'rnatilmaydi (oldingi tajriba).
+- Saboq: Uzilishda avval ARP/ping qayta tekshir; ikki gateway/DNS 8.8.8.8 ni kuzat.
 - Topshiriq: T1103-132855
 
 ## 2026-11-03 23:34 | Биринчи расмдаги матнни иккинчи расмга қўйиш
@@ -632,253 +587,30 @@
 - Saboq: Jamshidga yuboriladigan Excel'da jami summalarni doim tayyor qiymat qilib yoz (yoki LibreOffice bilan qayta hisoblat). Formula faqat so'ralsa. Faylni data_only bilan tekshir
 - Topshiriq: T1106-142318
 
-## 2026-11-06 15:28 | BTC SHORT tahlili: grafik rasmlari (1D/4H/1H)
-- Kategoriya: trading-grafik
-- Belgi: Jamshid tahlilning skrinshotlarini ST/TP, kirish va strategiyalar bilan so'radi
-- Sabab: TradingView'ni ochib skrinshot olish vositasi yo'q; api.binance.com DNS orqali ochilmadi (getaddrinfo failed)
-- Tuzatish: skript/btc_grafik.py yozildi (matplotlib), manba data-api.binance.vision ga almashtirildi; 3 ta rasm ish/trading ga chizildi va yuborildi
-- Natija: verify: 3 fayl 2026-11-06, har biri ~145 KB. Rasm mazmunini ko'rmadim. Bu TradingView skrinshoti emas (tasdiqlangan)
-- Saboq: Binance uchun avval data-api.binance.vision ishlat. 1D EMA200 hisobi svechalar soniga qarab 76 539 va 76 630 chiqdi, har safar bir xil limit ol
-- Topshiriq: T1106-152634
+## 2026-11-08 22:31 | Postер montaji: ikkinchi rasmdan birinchisiga o'xshash
+- Kategoriya: rasm-montaj
+- Belgi: Jamshid birinchi postерga o'xshatib ikkinchi rasmdan montaj so'radi
+- Sabab: Tayyor fon va rasmni kesish (rembg) vositasi yo'q edi; matn va muallif ismi aytilmagan
+- Tuzatish: skript/montaj_poster.py (Pillow): fon kodda chizildi, rasm yumshoq maska bilan qo'yildi, matn birinchi postердан olindi, muallif Jamshid Turgunov deb qo'yildi; ish/poster/poster2.jpg yuborildi
+- Natija: verify: fayl bugun yaratilgan, 1440x1800, yuborildi. Vizual sifat ko'zda tekshirilmagan (tasdiqlangan) (tasdiqlangan)
+- Saboq: Rasm montaji uchun fonni kesadigan model kerak; muallif ismini oldindan so'rash kerak
+- Topshiriq: T1108-223037
 
-## 2026-11-06 15:33 | TradingView Desktop'да BTC SHORT даражаларини чизиш уриниши
-- Kategoriya: trading-grafik
-- Belgi: Jamshid таҳлил чизиқлари TradingView'да қолиб, экранда кўринишини сўради
-- Sabab: TradingView Desktop ўрнатилган (3.5.0.8375), лекин агент экранни кўрмайди. SendKeys билан символ алмаштиришда ойна ёпилди. Қайта очилгач сарлавҳада USDRUB_TOM қолди
-- Tuzatish: Иловани қайта очдим, Pine код (SL 77500, кириш 76600, TP1 75250, TP2 74400) клипбордга қўйилди. Қўлда қўйиш қадамлари таклиф қилинди
-- Natija: verify: ойна сарлавҳаси ҳамон USDRUB_TOM. BTCUSDT га ўтмади, чизиқлар чизилмади (PARTIAL) (tasdiqlangan)
-- Saboq: Кўрмасдан UI автоматизация ишончсиз. Келгусида Pine кодни файлга сақлаб, ҳар қадамдан кейин Jamshid тасдиғини сўраш ёки график маълумотини OCR/скриншот орқали текшириш керак
-- Topshiriq: T1106-153120
+## 2026-11-08 22:35 | Poster montaji: rembg bilan qayta yig'ish
+- Kategoriya: rasm-montaj
+- Belgi: Jamshid: birinchi montaj professional darajada chiqmagan, o'xshamagan
+- Sabab: Odam qo'lda chizilgan oval maska bilan kesilgan edi, qirralar tabiiy emas; manba rasm atigi 640x640
+- Tuzatish: venv ga rembg o'rnatildi (u2net_human_seg, alpha_matting xotira yetmadi, o'chirildi). skript/montaj_poster_v2.py: haqiqiy kesish, yumshoq qirra, soya, UnsharpMask. ish/poster/poster3.jpg yuborildi
+- Natija: verify: poster3.jpg 1440x1800, bugun yaratilgan, yuborildi. Kesish sifati ko'zda tekshirilmagan; fon hali kodda chizilgan (tasdiqlangan)
+- Saboq: Yuqori ruxsatli manba rasm va birinchi postерning toza fon rasmi so'rash kerak; rembg endi tayyor
+- Topshiriq: T1108-223225
 
-## 2026-11-06 17:09 | BTC SHORT нарх даражалари учун автомат Telegram огоҳлантириш
-- Kategoriya: trading-alert
-- Belgi: Jamshid нарх кириш нуқтаси 76 600 га етганда хабар беришни сўради; агент фонда ишламайди
-- Sabab: Агент фақат топшириқ келганда ишлайди, фонда нарх кузатувчи жараён йўқ эди
-- Tuzatish: skript/btc_alert.py (Binance 1m свечалар, ҳолат машинаси WAIT/ENTERED/CLOSED) ва Task Scheduler вазифаси BTC-SHORT-Alert (ҳар 1 дақиқа). Хабар Telethon орқали Saved Messages'га. api_id/hash ish/tg_env.json да (BOM сабабли utf-8-sig билан ўқилади)
-- Natija: verify PASS: вазифа Ready, LastTaskResult=0, ҳолат файлида last_ts илгарилади, тест хабар юборилди (AUTH True). Ҳақиқий даража хабари ҳали синалмаган (нарх етмаган) (tasdiqlangan)
-- Saboq: Saved Messages'га push келмаслиги мумкин: бот токени орқали юбориш яхшироқ бўларди. Кейинги safar PowerShell Set-Content -Encoding utf8 билан ёзилган JSON'ни utf-8-sig билан ўқи. Нарх огоҳлантиришини умумий (symbol/даража параметрли) скриптга айлантириш мумкин
-- Topshiriq: T1106-170704
+## 2026-11-08 22:40 | Poster: muallif nomini almashtirish va plashka tiklash
+- Kategoriya: rasm-montaj
+- Belgi: Jamshid: muallif Kasimov Azizxon bo'lsin; poster4 da plashka matni buzilgan edi
+- Sabab: Yangi odam rasmi plashka matni ustiga tushgan; asl muallif matni (NormatovBehruz) qolgan
+- Tuzatish: skript/montaj_poster_v4_ism.py: plashka hududlari asl rasmdan qaytarildi, eski ism inpaint bilan o'chirildi, yangi ism Georgia Bold bilan yozildi; poster5.jpg
+- Natija: OCR poster5.jpg da Muallifi, Kasimov, Azizxon, Komentga yozib qoldiring ni o'qidi; fayl yuborildi. Vizual sifat ko'zda tekshirilmagan. (tasdiqlangan)
+- Saboq: Muallif ismini va imlosini (Kasimov/Qosimov) oldindan so'rash; Excel faol-ish belgisi bu ishga xato bog'langan, fayl o'zgarmadi.
+- Topshiriq: T1108-223852
 
-## 2026-11-06 17:18 | BTC SHORT chiziqlarini TradingView'ga qo'yish: Pine fayl va grafik ochish
-- Kategoriya: trading-grafik
-- Belgi: Jamshid ноутбукдаги TradingView'га таҳлилни қўйишни сўради
-- Sabab: Agent TradingView UI'ni ko'rmaydi; oldingi kor-korona SendKeys oynani yopgan edi, shuning uchun UI avtomatlashtirilmadi
-- Tuzatish: ish/trading/btc_short.pine yozildi (SL 77500, kirish 76600, TP1 75250, TP2 74400), clipboardga qo'yildi, BTCUSDT 1H grafik ochildi. Chiziqlar qo'lda Pine Editor orqali qo'shiladi
-- Natija: verify PASS: fayl 4 ta hline, oyna sarlavhasi 'BTCUSDT 76 147,80'. Chiziqlar grafikka chizilgani tasdiqlanmagan (PARTIAL) (tasdiqlangan)
-- Saboq: Pine kodni fayl va clipboardga tayyorlab, sarlavha bilan simvolni tekshir; chizishni foydalanuvchiga qoldir. Qaysi ноутбук ekanini oldindan so'ra
-- Topshiriq: T1106-171746
-
-## 2026-11-06 17:41 | TradingView chart integration V17: Pine validator, saqlash, vizual tekshiruv
-- Kategoriya: trading-grafik
-- Belgi: Pine fayl yaratilishi grafik o'zgardi degani emas edi; tekshiruv, dublikat nazorati va rost status yo'q edi
-- Sabab: Yetishmagan imkoniyat: TradingView oynasini ko'rib tekshirish va Pine statik validatsiyasi. UI'ga yozish (Pine Editor) hali qo'lda
-- Tuzatish: skript/tv_pine.py (generator, statik validator, dublikatsiz saqlash, clipboard readback, PrintWindow+RapidOCR tekshiruv, status) va skript/test_tv_pine.py (21 test). BTC SHORT ssenariysi ish/trading/pine/ ga yangi fayl bo'lib saqlandi, btc_short.pine tegilmadi
-- Natija: 21/21 test OK; clipboard readback aynan mos; TradingView skrinshoti olindi (bo'sh emas, BTCUSDT o'qildi), indikator grafikda yo'q -> PARTIAL. Pine kompilyatsiyasi TradingView'da tasdiqlanmagan (tekshirilmagan)
-- Saboq: OCR legendada 1h ni 1y deb o'qiydi: timeframe dalilini Pine ichidagi solishtirishdan ol. Python subprocess PATH'da pwsh yo'q; -Command dan keyin argument $args bo'lmaydi
-- Topshiriq: T1106-173643
-
-## 2026-11-06 17:50 | Тилла (PAXG/USDT) таҳлил графикларини расм қилиб юбориш
-- Kategoriya: trading-grafik
-- Belgi: Jamshid тилла таҳлилининг скриншотларини сўради
-- Sabab: Расмлар йўқ эди. api.binance.com DNS орқали топилмади (getaddrinfo failed)
-- Tuzatish: skript/xau_chart.py: matplotlib билан свеча, EMA20/50, VWAP, RSI графиклари (5м, 15м, 1соат). Хостни data-api.binance.vision га алмаштирдим, расмларни notify_owner билан юбордим
-- Natija: verify PASS: 3 та PNG (87-100 КБ) ish/xau/ да, юборилди. Расмларни кўз билан кўрмадим (tekshirilmagan визуал) (tasdiqlangan)
-- Saboq: Binance учун доим data-api.binance.vision ишлат (btc_alert.py ҳам шуни ишлатади). Скриптни тайм-фрейм ва символ аргументли қилиш мумкин
-- Topshiriq: T1106-174914
-
-## 2026-11-06 18:10 | Тилла (PAXGUSDT 15м) SHORT стратегиясини TradingView учун Pine қилиш
-- Kategoriya: trading-grafik
-- Belgi: Jamshid тилла таҳлилини (кириш, SL, TP) TradingView'га қўйишни сўради
-- Sabab: Agent TradingView UI'ga yoza olmaydi; Pine Editor'ga qo'yish qo'lda
-- Tuzatish: ish/xau/pax_15m.json ssenariy yozildi, skript/tv_pine.py prepare + clip: Pine v5 fayl (kirish 4053.8, SL 4063.1, TP1 4039.8, TP2 4025.8) saqlandi va clipboardga qo'yildi
-- Natija: verify PASS: 4 ta hline, clipboard fayl bilan bir xil. TradingView verify OCR: chiziqlar grafikda yo'q, kompilyatsiya tasdiqlanmagan (PARTIAL) (tasdiqlangan)
-- Saboq: Stale narx (18:03) bilan ssenariy tuziladi: yuborishdan oldin narxni yangilash kerak. Binance simvoli PAXGUSDT, XAUUSD emas
-- Topshiriq: T1106-181007
-
-## 2026-11-06 18:17 | Chrome'даги TradingView BTCUSD графигини текшириш
-- Kategoriya: trading-grafik
-- Belgi: Jamshid Chrome'даги ru.tradingview.com/chart/EAx2S11D (BTCUSD) да SL/кириш/TP чизиқлари бор-йўқлигини текширишни сўради
-- Sabab: Pine код TradingView'га қўлда қўйилмаган: у фақат clipboard ва файлда. Агент TradingView ичига ёза олмайди
-- Tuzatish: skript/chrome_shot_ocr.py ёздим: Chrome ойнасидан PrintWindow скриншот ва RapidOCR (натижа ish/chrome_ocr.txt, UTF-8 файлга). Ойнани ўзгартирмадим, фақат ўқидим
-- Natija: verify: скриншот олинди (1936x1056), OCR'да 77500, 76600, 75250, 74400 ва SIM йўқ, график ойнасида Pine индикатор кўринмайди. Нарх 75 817. Pine қўйилмагани тасдиқланди (PARTIAL), расмни кўз билан кўрмадим</natija> <parameter name="saboq">python -I режимида PYTHONIOENCODING ишламайди: OCR матнини print қилма, UTF-8 файлга ёз. Chrome учун tradingview_verify ишламайди (у фақат Desktop ойнасини текширади), шунинг учун умумий скриншот+OCR скрипти қолдирилди (tasdiqlangan)
-- Topshiriq: T1106-181607
-
-## 2026-11-06 18:19 | Chrome'даги TradingView'га BTC Pine кодини қўйиш йўриқномаси
-- Kategoriya: trading-grafik
-- Belgi: Jamshid Chrome'да Pine кодни қандай қўйишни сўради
-- Sabab: Агент TradingView ичига ёза олмайди, Pine Editor'га қўйиш қўлда
-- Tuzatish: ish/trading/btc_short.pine ни clipboard'га қайта қўйдим ва Chrome учун қадамларни ёздим
-- Natija: verify: clipboard'да 4 та hline ва 4 та даража (77500, 76600, 75250, 74400). Графикка қўйилгани ҳали тасдиқланмаган (PARTIAL) (tekshirilmagan)
-- Saboq: Chrome учун tradingview_verify ишламайди: қўйилгандан кейин chrome_shot_ocr.py билан текшир
-- Topshiriq: T1106-181858
-
-## 2026-11-06 18:37 | Chrome TradingView Pine Editor'ga BTC kodini qo'yish yo'riqnomasi
-- Kategoriya: trading-grafik
-- Belgi: Jamshid Pine Editor'ni ochdi (standart "Мой скрипт" ko'rinadi), nima qo'yishni so'radi
-- Sabab: Agent TradingView ichiga yoza olmaydi; kod clipboard'da bo'lishi va qo'lda Ctrl+A, Ctrl+V, "Добавить" qilinishi kerak
-- Tuzatish: ish/trading/btc_short.pine ni Set-Clipboard bilan clipboard'ga qo'ydim, o'qib tekshirdim, qadamlarni yozdim
-- Natija: verify: clipboard'da 4 ta hline va 77500/76600/75250/74400. Grafikka qo'yilgani hali tasdiqlanmagan (PARTIAL) (tekshirilmagan)
-- Saboq: Jamshid skrinshot yuborganda ekrandagi holatga mos aniq qadam bering; qo'yilgach chrome_shot_ocr.py bilan tekshirish kerak
-- Topshiriq: T1106-183737
-
-## 2026-11-06 19:08 | MT5 market-data диагностика (Exness)
-- Kategoriya: mt5-integratsiya
-- Belgi: Jamshid MT5 market-data интеграциясини тайёрлаш учун диагностика сўради
-- Sabab: Python MetaTrader5.initialize(path=Exness) IPC timeout (-10005) берди. Терминал ишлаб турибди (PID 17900, session 1), лекин агент жараёни XONSAROY\t.admin номидан, терминал маълумотлари эса A.ABDULLAYEV профилида; кўпроқ фойдаланувчи/ҳуқуқ чегараси сабаб (тасдиқланмаган). Ҳисоб: Exness-MT5Real12 (REAL), терминалда EA нусхаланган
-- Tuzatish: Ўзгартириш йўқ. skript/mt5_diag.py ёзилди (фақат ўқиш: terminal_info, symbols, tick, copy_rates; баланс чиқармайди). Exness терминали менинг уринишимдан ишга тушди
-- Natija: Йўллар: C:\Program Files\MetaTrader 5\terminal64.exe (ишлаяпти, PID 11648) ва C:\Program Files\MetaTrader 5 EXNESS\terminal64.exe; metatrader5 5.0.6231, Python 3.12 64-bit, numpy/pandas бор. Уланиш ва BTCUSD OHLC ҳали текширилмаган (PARTIAL) (tekshirilmagan) (o'zgartirish bo'lmagan)
-- Saboq: MT5 Python API терминал билан бир фойдаланувчи ва бир ҳуқуқ даражасида ишлаши керак; агент t.admin остида, терминал A.ABDULLAYEV остида. Keyingi safar: терминал фойдаланувчисининг ўз сессиясида (Scheduled Task, interactive) скриптни ишга тушириш
-- Topshiriq: T1106-190454
-
-## 2026-11-07 14:45 | MT5 текшируви ва BTC скриншот+таҳлил
-- Kategoriya: trading-grafik
-- Belgi: Jamshid MT5 текшириб, скриншотлар билан таҳлил юборишни сўради
-- Sabab: trading_mt5_status шамларни хом бермайди, MT5 дан тўғридан-тўғри чизиб бўлмайди
-- Tuzatish: skript/btc_chart.py: Binance BTCUSDT (data-api.binance.vision) бўйича 15м/1с/4с свеча, EMA20/50, RSI, ATR; расмлар ish/btc/ да, notify_owner билан юборилди
-- Natija: verify PASS: 3 та PNG (88-96 КБ). Расмларни кўз билан кўрмадим; нарх MT5 эмас, Binance (tasdiqlangan PARTIAL) (tasdiqlangan)
-- Saboq: MT5 хом шамларини файлга чиқарадиган рухсат этилган восита бўлса, чизишни тўғридан-тўғри MT5 дан қилиш мумкин. Ҳозирча Binance прокси.
-- Topshiriq: T1107-144450
-
-## 2026-11-07 15:05 | Крипто 15м скан ва ETH демо SELL уриниши
-- Kategoriya: trading-demo
-- Belgi: Jamshid қисқа таймфреймда крипто топиб демо ҳисобда зделка очишни сўради
-- Sabab: MT5 терминалида AutoTrading ўчиқ: order_send retcode 10027. LTCUSDm да order_check 10017 Trade disabled. ADAUSDm маълумоти эски (2024)
-- Tuzatish: Binance 15м бўйича 10 та крипто скани (EMA20/50, RSI, ATR). ETHUSDm SELL (SL 2253, TP 2224, 0.1 лот) order_check ўтди, юбориш рад этилди. AutoTrading тугмасига тегилмади
-- Natija: verify: positions — SENTINAL очган позиция йўқ (DEMO). Зделка очилмаган (PARTIAL) (tekshirilmagan)
-- Saboq: Зделкадан олдин терминалда AutoTrading ёқилганини Jamshid дан сўраш керак; order_check уни кўрсатмайди, фақат юборишда чиқади
-- Topshiriq: T1107-150417
-
-## 2026-11-07 15:07 | ETH demo SELL qayta urinish — ochildi
-- Kategoriya: trading-demo
-- Belgi: Jamshid "endi urinib ko'r" dedi; avval 10027 AutoTrading disabled edi
-- Sabab: AutoTrading endi yoqilgan (Jamshid yoqgan ko'rinadi); status matni eskirgan bo'lishi mumkin
-- Tuzatish: trading_mt5_order open ETHUSDm sell 0.1, SL 2253, TP 2224 (tasdiq bilan)
-- Natija: retcode 10009, narx 2244.73, ticket 2720305695; positions: ochiq, -0.12 (DEMO) (tekshirilmagan)
-- Saboq: Status "Algo Trading o'chiq" ko'rsatsa ham, retry qilib ko'rish kerak — u ishonchli emas
-- Topshiriq: T1107-150655
-
-## 2026-11-07 15:15 | MT5 ойнасининг ҳақиқий расмини юбориш
-- Kategoriya: trading-grafik
-- Belgi: Jamshid ETH демо зделкасини MT5 экранидан скриншот қилиб юборишни сўради; олдин чизилган график юборилган эди
-- Sabab: Олдинги расм Binance маълумотидан matplotlib билан чизилган эди, MT5 экрани эмас. Ҳозир терминалда график BTCUSDm H1 очиқ
-- Tuzatish: PrintWindow билан terminal64 ойнаси (кликсиз) ish/mt5/mt5_window.png га олинди ва notify_owner билан юборилди
-- Natija: verify: файл бугун яратилган, 104708 байт, юборилди. positions: ETHUSDm sell #2720305695 очиқ, -0.11. Расмни кўз билан кўрмадим (tekshirilmagan визуал) (tasdiqlangan)
-- Saboq: Графикни ETHUSDm га ўтказиш UI клик талаб қилади — Jamshid рухсати керак. Скрипт қилиб skript/ га қўйиш мумкин
-- Topshiriq: T1107-151444
-
-## 2026-11-07 15:53 | Кучли кириш учун автомат сканер ва "зделка очайми?" хабари
-- Kategoriya: trading-alert
-- Belgi: Jamshid ҳар safar қўлда "кучлироқ кириш изла" деб сўрарди, автомат қилишни хоҳлади
-- Sabab: Фонда сигнал излайдиган жараён йўқ эди, агент фақат топшириқ келганда ишлайди
-- Tuzatish: skript/auto_scan_alert.py: 10 крипто, 4с+1с тренд ва 15м кириш, балл>=5/6, SL 1.5 ATR, TP 2.25 ATR, 4 соат cooldown. Task Scheduler Auto-Scan-Alert ҳар 15 дақиқа. Хабар Telethon орқали Saved Messages'га. Зделка ўзи очилмайди
-- Natija: verify PASS: вазифа Ready, LastTaskResult=0, кейинги ишга тушиш 16:07, ҳолат файлида LTC ва DOGE SELL ёзилган. Хабар Telegram'га етганини кўрмадим (tasdiqlangan) (tasdiqlangan)
-- Saboq: Сигнални MT5'да очилувчи символлар билан чеклаш керак (LTC/BNB Trade disabled, DOGE маълумоти эски). Saved Messages'га push келмаслиги мумкин: бот орқали юбориш яхшироқ
-- Topshiriq: T1107-155017
-
-## 2026-11-07 16:50 | Skaner signallarini Telegram guruhiga yo'naltirish
-- Kategoriya: trading-alert
-- Belgi: Jamshid signal/tahlillar guruhga kelishini so'radi; ulashgan taklif havolasi ishlamadi
-- Sabab: Taklif havolasi eskirgan (InviteHashExpiredError). Akkauntda Jamshid yaratgan 'sentinel treading alert' guruhi bor (id -5588340884)
-- Tuzatish: skript/tg_guruh_tekshir.py (CheckChatInvite, qo'shilmasdan). auto_scan_alert.py da send() GROUP_ID ga yuboradi, nusxa Saved Messages'ga. Telethon'da c(request) ishlatiladi (c.invoke yo'q). Sinov xabari yuborildi
-- Natija: verify PASS: GROUP_ID qatori bor, --dry exit 0. Sinov xabari ID 881973. Guruhda ko'rinishini ko'rmadim (tasdiqlangan API javobi bilan) (tasdiqlangan)
-- Saboq: Havola ishlamasa avval dialoglardan o'zi yaratgan guruhni qidir. Guruh nomini Jamshidning niyatiga moslab tasdiqlat
-- Topshiriq: T1107-164753
-
-## 2026-11-07 17:05 | Skaner xabarlari guruhga bot nomidan
-- Kategoriya: trading-alert
-- Belgi: Signallar Jamshid shaxsiy akkaunti nomidan guruhga yozilardi, bot nomidan bo'lishi kerak edi
-- Sabab: send() Telethon (user session) ishlatardi
-- Tuzatish: send() Bot API sendMessage ga o'tkazildi; token ish/bot_env.json da (inventar telegram-bot-alert). Bot guruhda allaqachon bor edi
-- Natija: Sinov xabari bot nomidan yuborildi (message_id 1236, from @sentinel_v4bot); --dry exit 0 (tasdiqlangan)
-- Saboq: Guruh uchun avval bot yo'lini tanla; foydalanuvchi sessiyasi faqat bot ishlamasa
-- Topshiriq: T1107-170248
-
-## 2026-11-07 17:12 | Guruh signaliga Ha/Yo'q tugmalari (deep-link)
-- Kategoriya: trading-alert
-- Belgi: Guruhdagi 'zdelka ochaymi?' xabarida tugma yo'q, bot guruhdagi yozuvga javob bermaydi
-- Sabab: Bot getUpdates bilan agent yadrosida ishlaydi, guruh chat_id ruxsat ro'yxatida emas; callback tugmani alohida skript ushlay olmaydi (409 konflikt)
-- Tuzatish: auto_scan_alert.py: inline URL tugmalar t.me/sentinel_v4bot?start=ha_SYM_SIDE / yoq_...; bosilsa shaxsiy chatga /start yuboriladi. Yadroga tegilmadi
-- Natija: compile OK, --dry exit 0, guruhga tugmali sinov xabari yuborildi (message_id 1243). Tugma bosilgandagi oqimni hali sinab ko'rmadim (tasdiqlangan)
-- Saboq: Guruhda javob berish uchun yadro o'zgarishi kerak: guruh chat_id + Jamshidning user id ruxsati
-- Topshiriq: T1107-171035
-
-## 2026-11-07 17:36 | 7 strategiyani chuqur backtest (5 yil, 7 aktiv)
-- Kategoriya: trading-backtest
-- Belgi: Jamshid 7 strategiya nega manfiy ekanini va statistik barqaror strategiya bor-yo'qligini so'radi
-- Sabab: Gross kutilma ~0 (tasodifiy kirishdan farq yo'q), xarajat 0.03-0.27 R ni yeydi; limit fill barida TP sanash soxta foyda berdi (tuzatildi)
-- Tuzatish: skript/bt_engine.py, bt_wfa.py, bt_analyze.py, bt_report.py yozildi; Dukascopy+Binance 2021-2026 yuklandi; 46715 savdo simulyatsiya; AUTO yoqilmadi, real savdo ochilmadi
-- Natija: Hech bir strategiya ishonchli musbat emas. Yagona nomzod MA-CROSS 4h: net +0.05R, p=0.09, IS -0.012, OOS +0.186, oltinga bog'liq; Bonferroni (98 test) bo'yicha ma'noli emas. Hisobot docx+xlsx yuborildi (tasdiqlangan) (tekshirilmagan)
-- Saboq: Keyingi safar intrabar konservativ qoidani boshidan qo'yish; M15 uchun uzoqroq tarix kerak; filtrlarni qayta simulyatsiya qilish mumkin
-- Topshiriq: T1107-171644
-
-## 2026-11-07 21:04 | DEMO BTC SELL 0.03 ochildi (Jamshid tasdig'i)
-- Kategoriya: trading-demo
-- Belgi: Jamshid "hammasiga ha" dedi, avval taklif qilingan BTC SELL zdelkasi ochilmagan edi
-- Sabab: Eski BTC darajalari (kirish 75770, TP 75600) eskirgan edi, narx pastga ketgan; sinov narxi ham kechikkan (oxirgi sham 7 daqiqa eski)
-- Tuzatish: Darajalar qayta hisoblandi, order_check o'tdi (retcode 0), keyin BTCUSDm SELL 0.03 SL 75740 TP 75430 ochildi
-- Natija: retcode 10009, tiket 2720676738, narx 75683.12. Positions bilan qayta tasdiqlandi: 2 ta ochiq (ETH 0.87, BTC -0.21). SOL ochilmadi. verify tool MT5 uchun usul yo'q, shuning uchun positions o'lchovi ishlatildi (tekshirilmagan)
-- Saboq: Zdelka oldidan doim yangi narx oling: status shami kechikadi, haqiqiy narx 80 punktga farq qildi. SL ni haqiqiy kirish narxiga nisbatan hisoblash kerak
-- Topshiriq: T1107-210236
-
-## 2026-11-07 21:08 | Skaner alertiga ovozli xabar qo'shildi
-- Kategoriya: trading-alert
-- Belgi: Jamshid alert ovozli xabar bo'lib kelishini va yana kirishlarni topishni so'radi
-- Sabab: auto_scan_alert.py faqat matn+tugma yuborardi, ovoz yo'q edi
-- Tuzatish: send_voice() qo'shildi: tts_voice.py (uz, lotin matn) bilan ogg yaratib Bot API sendVoice orqali guruhga yuboradi; send() muvaffaqiyatli bo'lsa chaqiriladi, xatoda skript to'xtamaydi
-- Natija: compile OK, --dry exit 0; sinov ovozli xabar sendVoice 200 ok:true. Guruhda eshitilganini ko'rmadim. Yangi kuchli signal yo'q (BTC/ETH/BNB cooldown'da, qolganlari ball 3-4) (tasdiqlangan) (tasdiqlangan)
-- Saboq: Skaner cooldown'ni hisobga olgani uchun 'signal yo'q' chiqishi mumkin; MT5 demoda faqat BTC/ETH ochiladi, SYMS ni shunga moslash mumkin
-- Topshiriq: T1107-210624
-
-## 2026-11-07 21:16 | Skaner signali guruhdan shaxsiy chatga o'tkazildi
-- Kategoriya: trading-alert
-- Belgi: Guruhdagi URL tugma bosilganda shaxsiy chatga /start tushardi, Jamshid guruhda zdelka ocha olmadi
-- Sabab: URL deep-link tugma guruhda callback bermaydi; yadro guruh xabarlariga javob bermaydi
-- Tuzatish: auto_scan_alert.py: GROUP_ID o'rniga Jamshid shaxsiy chat id (business.json user_chat_id), tugmalar olib tashlandi, matnda 'ha deb yozing'. Tirnoq sintaksis xatosi tuzatildi
-- Natija: verify PASS: py_compile rc=0, --dry ishladi, sinov xabari shaxsiy chatga ok=True (message_id 1340). Haqiqiy signal xabari hali kutilmoqda (tasdiqlangan)
-- Saboq: PowerShell Replace bilan matn ichiga qo'shtirnoq qo'yish sintaksisni buzadi: avval compile qiling. Faol ish fayli (xlsx) bu topshiriqqa tegishli emas edi
-- Topshiriq: T1107-211504
-
-## 2026-11-07 21:18 | Skaner chastotasi 15 dan 5 daqiqaga
-- Kategoriya: trading-alert
-- Belgi: Jamshid skaner tezroq ishlashini va zdelkani so'ramasdan ochishni so'radi
-- Sabab: Auto-Scan-Alert har 15 daqiqada ishlardi. Zdelka ochish kodda har safar Jamshid tasdig'ini talab qiladi, shuning uchun to'liq avtomat ochish mumkin emas
-- Tuzatish: Set-ScheduledTask bilan Auto-Scan-Alert trigger intervali PT5M qilindi. Avto-ochish qilinmadi (gate talabi)
-- Natija: verify PASS: vazifa Ready, interval PT5M (tasdiqlangan). Sozlama o'zgardi, ammo yangi signal hali kelmagan; avto-ochish bajarilmadi (tasdiqlangan)
-- Saboq: Jamshidga avtomat ochish tasdiqsiz mumkin emasligini birinchi marta aniq aytish kerak. Signal xabarida tayyor check parametrlari bo'lsa, 'ha' bilan tezroq ochiladi
-- Topshiriq: T1107-211752
-
-## 2026-11-07 21:33 | Skaner 2 daqiqaga tezlashtirildi, 'Ha yoki yoq' savoli
-- Kategoriya: trading-alert
-- Belgi: Jamshid topilgan zdelkalar shu chatga 'ha yoki yo'q' savoli bilan kelishini va skaner tezroq ishlashini so'radi
-- Sabab: Auto-Scan-Alert 5 daqiqada ishlardi; xabar matni 'ha deb yozing' edi
-- Tuzatish: Trigger intervali PT2M qilindi; auto_scan_alert.py da matn 'Zdelka ochaymi? Ha yoki yoq deb yozing' ga o'zgartirildi
-- Natija: verify PASS: vazifa Ready, interval PT2M, matn skriptda bor, py_compile rc=0. Haqiqiy signal hali kelmagan (tasdiqlangan) (tasdiqlangan)
-- Saboq: Chastotani oshirish signal sonini oshirmaydi: asosiy cheklov MIN_SCORE va cooldown. Zdelka ochish baribir har safar tasdiq talab qiladi
-- Topshiriq: T1107-213259
-
-## 2026-11-07 22:07 | 5 yangi strategiya backtestga qo'shildi
-- Kategoriya: strategiya-backtest
-- Belgi: Jamshid bank manipulyatsiyasi, trend chizig'i va SNR ni strategiyalarga qo'shishni so'radi
-- Sabab: Dvigatelda bu 3 yo'nalish yo'q edi
-- Tuzatish: skript/bt_new.py yozildi: BANK-SWEEP, TL-BOUNCE, TL-BREAK, SNR-REJ, SNR-FLIP; 7 aktiv 1h/4h; xlsx/docx qayta yaratildi
-- Natija: verify_artifact PASS, 12 strategiya xlsx da. Hammasi net manfiy: eng yaxshisi TL-BREAK 4h OOS -0.051R (PF 0.93); BANK-SWEEP eng yomoni -0.245R (tekshirilmagan)
-- Saboq: Oddiy sweep signali tasodifdan yaxshi emas; keyingi qadam: sweep + FVG/displacement filtri
-- Topshiriq: T1107-220457
-
-## 2026-11-07 23:42 | 10 altkoin bo'yicha tezkor tahlil
-- Kategoriya: trading-alt-analiz
-- Belgi: Jamshid BTC/ETH/SOL/XRP/BNB dan boshqa kripto valyutalarni tahlil qilishni so'radi
-- Sabab: api.binance.com ulanishni uzdi (ConnectionReset); MT5 DOGE/ADA uchun eski tarix (2024) qaytardi
-- Tuzatish: skript/alt_analiz.py yozildi, Binance mirror data-api.binance.vision ishlatildi; 1h/4h/1d bo'yicha trend, RSI, ATR, 48s diapazon, hajm nisbati hisoblandi
-- Natija: verify PASS: 10 koin xatosiz chiqdi. Hammasi 4h da DOWN, 7 kunda -2.2%..-14.9%, hajm past. Backtest qilinmagan, entry/SL/TP berilmadi (tasdiqlangan)
-- Saboq: Binance asosiy domeni bloklangan, data-api.binance.vision ishlaydi (bt_fetch.py ga ham qo'llash mumkin). MT5 trading_mt5_status faqat qisqa xulosa beradi, to'liq tahlil uchun mos emas
-- Topshiriq: T1107-233957
-
-## 2026-11-07 23:45 | Skanerga 4 altkoin qo'shildi
-- Kategoriya: trading-alert
-- Belgi: Jamshid altkoin tahlilidan keyin 'qo'shib chiq' dedi
-- Sabab: auto_scan_alert.py SYMS da 10 koin bor edi, DOT/TRX/SUI/NEAR yo'q edi; TON Binance mirrorida yo'q
-- Tuzatish: SYMS ga DOTUSDT, TRXUSDT, SUIUSDT, NEARUSDT qo'shildi; zaxira auto_scan_alert.py.bak
-- Natija: verify PASS: SYMS 14 koin, py_compile rc=0; --dry xatosiz, kuchli signal yo'q (eng yuqori ball 4). TRX dry chiqishida ko'rinmadi, sababi tekshirilmagan (tasdiqlangan)
-- Saboq: 'Qo'shib chiq' noaniq edi: taxmin qilib skanerga qo'shdim. TRX nega chiqmaganini keyingi safar tekshirish kerak
-- Topshiriq: T1107-234437

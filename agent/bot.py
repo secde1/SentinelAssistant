@@ -52,11 +52,6 @@ HELP = """IT-agent buyruqlari:
 • /skill — skillar ro'yxati.   • /xulosa — haftalik xulosa hozir.   • /limit — Claude obuna limiti holati.
 • /reels — Instagram Reels holati.   • /reels_tayyorla [soni] — hozir tayyorlash.
 • /reels_pauza, /reels_davom — kunlik tayyorlashni to'xtatish / davom ettirish.
-• /trading — trading tadqiqoti (paper trading) holati.   • /trading_tahlil [SYMBOL TF] — hozir tahlil.
-• /trading_hisobot — bugungi hisobot.   • /trading_guruh <chat_id> — nashr guruhini tasdiqlash (_ochir — uzish).
-• /trading_faollashtir <STRATEGIYA> <versiya> — eksperimentdan o'tgan versiyani faollashtirish.
-• /trading_mode analysis|confirm|auto — savdo rejimi.   • /trading_stop — AUTO ni o'chirish.   • /trading_flat — o'zimiz ochgan
-  demo pozitsiyalarni yopish (tasdiq bilan).
 • /tun — tungi tadqiqot holati (/tun on|off).   • /tun_hisobot — hozirgi holat fayllari (Excel + Word).
 Tasdiq so'rovlariga "ha" yoki "yo'q" (yoki tugmalar). Javob bo'lmasa — amal bajarilmaydi."""
 
@@ -84,10 +79,7 @@ class TelegramBot:
         self.weekly_fn = None  # () -> str
         self.stt = None  # Transcriber — app.py da o'rnatiladi (cfg.stt_enabled bo'lsa)
         self.studio = None  # StudioStore — app.py da o'rnatiladi (cfg.reels_enabled bo'lsa)
-        self.trading = None  # TradingService — app.py da (TRADING_ENABLED=1 bo'lsa)
-        self.signals = None  # SignalService (V22) — app.py da
         self.nightly = None  # NightIdeas (V26) — app.py da
-        self.trading_scheduler = None
         self._reel_replies: dict[int, tuple[str, str]] = {}  # xabar id -> (rev|rej|time, reel id)
         self.chat_id = cfg.allowed_chat_id
         self.business = BusinessStore(paths.ish / "business.json")
@@ -268,25 +260,7 @@ class TelegramBot:
             return
         await self._enqueue(msg)
 
-    async def _on_signal_callback(self, cq: dict) -> None:
-        """sentinel:confirm|reject:<signal_id> — guruhdan keladi. Egasi (user_id) va signal guruhi SignalService'da
-        tekshiriladi; boshqa foydalanuvchi bossa hech narsa o'zgarmaydi. Har qanday holatda answerCallbackQuery chaqiriladi."""
-        chat_id = ((cq.get("message") or {}).get("chat") or {}).get("id")
-        user_id = (cq.get("from") or {}).get("id")
-        try:
-            if self.signals is None:
-                answer = "Signal tizimi o'chiq"
-            else:
-                answer = await self.signals.handle_callback(cq.get("data") or "", user_id, chat_id)
-        except Exception:  # noqa: BLE001 — tugma ishlamasa xato logga yoziladi, foydalanuvchiga javob beriladi
-            log.exception("signal tugmasi xatosi (chat %s, user %s)", chat_id, user_id)
-            answer = "Xatolik: tugma qayta ishlanmadi (logga yozildi)"
-        await self.api.answer_callback(cq["id"], answer[:190])
-
     async def _on_callback(self, cq: dict) -> None:
-        if (cq.get("data") or "").startswith("sentinel:"):
-            await self._on_signal_callback(cq)
-            return
         chat_id = ((cq.get("message") or {}).get("chat") or {}).get("id")
         if not self.authorized(chat_id, (cq.get("from") or {}).get("id")):
             self.journal.event("unauthorized", "Ruxsatsiz tugma bosildi", chat_id=chat_id, user_id=(cq.get("from") or {}).get("id"))
@@ -374,12 +348,7 @@ class TelegramBot:
         cmd, _, rest = text.partition(" ")
         cmd = cmd.split("@")[0].lower()
         rest = rest.strip()
-        if cmd == "/start" and rest.lower().startswith(("ha_", "yoq_")):
-            # eski skanerning URL tugmasi (t.me/...?start=ha_SYMBOL_SIDE): u zdelka ochmaydi — buni aniq aytamiz
-            await self.send_text("ℹ️ Bu ESKI tugma (URL turida), u zdelka ochmaydi va hech narsa o'zgarmadi. Yangi signallar "
-                                 "'SENTINEL | STRONG SIGNAL' ko'rinishida ✅ HA / ❌ YO'Q tugmalari bilan keladi — o'shalarni "
-                                 "bosing. Hozir kuchli signal bo'lmasa, xabar kelmaydi.")
-        elif cmd in ("/start", "/help"):
+        if cmd in ("/start", "/help"):
             await self.send_text(HELP)
         elif cmd == "/status":
             waits = self.pending.all()
@@ -410,8 +379,6 @@ class TelegramBot:
                 self._spawn(self._weekly_now())
         elif cmd.startswith("/reels"):
             await self._reels_command(cmd, rest)
-        elif cmd.startswith("/trading"):
-            await self._trading_command(cmd, rest)
         elif cmd.startswith("/tun"):
             await self._night_command(cmd, rest)
         elif cmd in ("/limit", "/xarajat"):
@@ -431,13 +398,6 @@ class TelegramBot:
                            chat_id=chat.get("id"), status=new, by=who)
         if chat.get("type") not in ("group", "supergroup", "channel"):
             return
-        if new in ("member", "administrator"):
-            await self.send_text(f"ℹ️ Bot '{chat.get('title')}' ({chat.get('type')}) ga qo'shildi (qo'shgan: {who}). "
-                                 f"chat_id: {chat.get('id')}\nTrading tadqiqoti nashrlari uchun tasdiqlash: "
-                                 f"/trading_guruh {chat.get('id')}\nTasdiqlamasangiz — u yerga hech narsa yozilmaydi.")
-        elif new in ("left", "kicked") and self.trading is not None and \
-                self.trading.settings.group_chat_id == chat.get("id"):
-            await self.send_text(f"⚠️ Bot trading guruhidan chiqarildi ({chat.get('title')}). Nashr to'xtadi.")
 
     async def _night_command(self, cmd: str, rest: str) -> None:
         """/tun — holat; /tun on|off — yoqish/o'chirish; /tun_hisobot — hozirgi tun hisobotini (Excel + Word) yuborish."""
@@ -460,134 +420,6 @@ class TelegramBot:
     def _render_night(nt, night: str):
         from .nightly import render_files
         return render_files(nt.store, night, nt.root / night, "oraliq holat (yakuniy emas)")
-
-    async def _trading_command(self, cmd: str, rest: str) -> None:
-        svc, sch = self.trading, self.trading_scheduler
-        if svc is None:
-            await self.send_text("Trading tadqiqoti o'chiq. Yoqish: .env da TRADING_ENABLED=1 va agentni qayta ishga "
-                                 "tushirish. Bu faqat tadqiqot va qog'oz savdo — real savdo qilinmaydi.")
-            return
-        if cmd == "/trading":
-            await self.send_text(svc.status_text())
-        elif cmd == "/trading_tahlil":
-            parts = rest.split()
-            symbol = parts[0].upper() if parts else None
-            tf = parts[1].lower() if len(parts) > 1 else None
-            await self.send_text("⏳ Tahlil qilinmoqda (faqat yopilgan shamlar, ochiq ma'lumot)...")
-            try:
-                rec = await sch.run_now(symbol, tf)
-            except Exception as exc:  # noqa: BLE001 — DataUnavailable va boshqalar: ochiq aytiladi
-                await self.send_text(f"Tahlil qilinmadi: {exc}")
-                return
-            from .trading.publish import format_analysis
-            note = {"sent": "guruhga yuborildi", "no_target": "guruh ulanmagan — faqat bazada",
-                    "duplicate": "allaqachon yuborilgan"}.get(rec.get("_publication"), rec.get("_publication"))
-            await self.send_text(format_analysis(rec, svc.settings.tz) + f"\n(Nashr: {note})")
-        elif cmd == "/trading_hisobot":
-            text, _ = await asyncio.to_thread(svc.daily_report, svc.local_today())
-            await self.send_text(text)
-        elif cmd == "/trading_guruh":
-            if not rest.strip().lstrip("-").isdigit():
-                gid = svc.settings.group_chat_id
-                await self.send_text(f"Hozirgi guruh: {gid or 'yoq'}. Ulash: /trading_guruh <chat_id> (bot o'sha guruhda "
-                                     "bo'lishi kerak).")
-                return
-            gid = int(rest.strip())
-            try:
-                msg = await self.api.send_message(gid, "🧪 SENTINAL trading tadqiqoti shu guruhga ulandi. Bu yerda faqat "
-                                                       "ta'limiy tahlillar va qog'oz savdo (paper trading) natijalari "
-                                                       "e'lon qilinadi — real savdo va moliyaviy maslahat emas.")
-            except Exception as exc:  # noqa: BLE001
-                await self.send_text(f"Guruhga yozib bo'lmadi ({exc}). Bot guruhda va yozish huquqi borligini tekshiring.")
-                return
-            title = ((msg or {}).get("chat") or {}).get("title")
-            svc.settings.authorize_group(gid, title)
-            self.journal.event("trading_group", f"Trading guruhi tasdiqlandi: {gid} ({title})", chat_id=gid)
-            await self.send_text(f"✅ Trading guruhi tasdiqlandi: {title or gid}. Navbatdagi tahlillar shu yerga chiqadi.")
-        elif cmd == "/trading_guruh_ochir":
-            svc.settings.data["group_chat_id"] = None
-            svc.settings.save()
-            self.journal.event("trading_group", "Trading guruhi uzildi")
-            await self.send_text("Trading guruhi uzildi — nashr to'xtadi (tahlillar bazada davom etadi).")
-        elif cmd == "/trading_signal":
-            sv = self.signals
-            mode = rest.strip().lower()
-            if sv is None:
-                await self.send_text("Signal tizimi ishga tushmagan.")
-            elif mode not in ("off", "dry", "live"):
-                await self.send_text(f"Signal rejimi: {sv.mode}. O'zgartirish: /trading_signal off|dry|live "
-                                     "(dry — skanerlaydi, guruhga yubormaydi; live — guruhga signal yuboradi). Faqat PAPER.")
-            else:
-                svc.settings.data.setdefault("signals", {})["mode"] = mode
-                svc.settings.save()
-                self.journal.event("trading_signals", f"Signal rejimi: {mode}", mode=mode)
-                await self.send_text(f"Signal rejimi: {mode}. Real order ochilmaydi (faqat paper).")
-        elif cmd == "/trading_signal_test":
-            sv = self.signals
-            await self.send_text(await sv.send_test(rest.strip() or None) if sv else "Signal tizimi ishga tushmagan.")
-        elif cmd == "/trading_mode":
-            sv = self.signals
-            mode = rest.strip().lower()
-            cfg = svc.settings.data.setdefault("signals", {})
-            if sv is None:
-                await self.send_text("Signal tizimi ishga tushmagan.")
-            elif mode not in ("analysis", "confirm", "auto"):
-                await self.send_text(f"Rejim: signal {cfg.get('mode')}, savdo {cfg.get('trade_mode', 'confirm')} (demo_orders "
-                                     f"{cfg.get('demo_orders')}, sizing {cfg.get('sizing')}).\n/trading_mode analysis (faqat kuzatish) | "
-                                     "confirm (HA tugmasi) | auto (o'zi ochadi, faqat DEMO)")
-            elif mode == "auto" and not (sv.demo_enabled and cfg.get("sizing") == "risk"):
-                await self.send_text("AUTO yoqilmadi: demo_orders yoqilgan va sizing=risk bo'lishi kerak (1% risk, 2 pozitsiya).")
-            else:
-                cfg["mode"] = "dry" if mode == "analysis" else "live"
-                sv.set_trade_mode("auto" if mode == "auto" else "confirm", "egasi buyrug'i")
-                self.journal.event("trading_signals", f"/trading_mode {mode}", mode=mode)
-                await self.send_text({"analysis": "ANALYSIS: faqat kuzatish, guruhga/chatga signal yuborilmaydi.",
-                                      "confirm": "CONFIRMATION: signal tugma bilan tasdiqlanadi.",
-                                      "auto": "AUTO yoqildi (faqat DEMO): kuchli signalda o'zi 2 pozitsiya ochadi; o'chirgich: ketma-ket "
-                                              "3 zarar yoki 10% pasayish. To'xtatish: /trading_stop."}[mode])
-        elif cmd == "/trading_stop":
-            if self.signals is None:
-                await self.send_text("Signal tizimi ishga tushmagan.")
-            else:
-                self.signals.set_trade_mode("confirm", "egasi to'xtatdi")
-                await self.send_text("AUTO to'xtatildi: rejim CONFIRMATION. Ochiq pozitsiyalar joyida (yopish: /trading_flat).")
-        elif cmd == "/trading_flat":
-            sv = self.signals
-            if sv is None or sv.trader is None:
-                await self.send_text("MT5 demo savdo ulanmagan.")
-            elif await self.request_approval("FLAT", "Barcha SENTINAL (o'zimiz ochgan) MT5 DEMO pozitsiyalarini yopaymi?"):
-                res = await asyncio.to_thread(sv.flat_all)
-                await self.send_text("Yopish natijasi:\n" + ("\n".join(res) or "ochiq pozitsiya yo'q"))
-        elif cmd == "/trading_signallar":
-            sv = self.signals
-            if sv is None:
-                await self.send_text("Signal tizimi ishga tushmagan.")
-            else:
-                st = sv.stats()
-                await self.send_text(f"Signallar ({sv.mode}): {st['signals'] or 'yoq'}\n"
-                                     f"Paper: {st['paper'] or 'yoq'}; yopilgan "
-                                     f"{st['closed']}, jami {st['total_r']}R, o'rtacha {st['avg_r']}R (xarajat bilan).")
-        elif cmd == "/trading_faollashtir":
-            parts = rest.split()
-            if len(parts) != 2 or not parts[1].isdigit():
-                await self.send_text("Foydalanish: /trading_faollashtir <STRATEGIYA> <versiya>, masalan TF-PULLBACK 2")
-                return
-            sid, ver = parts[0].upper(), int(parts[1])
-            exp = svc.db.one("SELECT experiment_id, verdict FROM experiments WHERE strategy_id=? AND candidate_version=? "
-                             "ORDER BY created_at DESC LIMIT 1", (sid, ver))
-            try:
-                svc.registry.activate(sid, ver, approved_by=f"Jamshid (Telegram), eksperiment "
-                                                            f"{exp['experiment_id'] if exp else 'yoq'}")
-            except ValueError as exc:
-                await self.send_text(f"Faollashtirilmadi: {exc}")
-                return
-            warn = "" if exp and exp["verdict"] == "supported" else \
-                " ⚠️ Bu versiya uchun 'supported' eksperiment yo'q — dalilsiz o'zgarish."
-            self.journal.event("trading_strategy", f"Strategiya faollashtirildi: {sid} v{ver}", strategy=sid, version=ver)
-            await self.send_text(f"✅ {sid} v{ver} faol. Oldingi versiya tarixda saqlanadi.{warn}")
-        else:
-            await self.send_text("Trading buyruqlari: /trading, /trading_tahlil [SYMBOL TF], /trading_hisobot, "
-                                 "/trading_guruh <chat_id>, /trading_guruh_ochir, /trading_faollashtir <ID> <versiya>")
 
     async def _reels_command(self, cmd: str, rest: str) -> None:
         if self.studio is None:

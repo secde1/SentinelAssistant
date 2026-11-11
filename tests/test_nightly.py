@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 
-from test_mt5 import _ctx
+from ctx_helper import _ctx
 
 from agent import nightly as nt
 from agent.tools import ideas
